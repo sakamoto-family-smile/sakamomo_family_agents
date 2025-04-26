@@ -56,38 +56,32 @@ class AgentTaskManager(InMemoryTaskManager):
 
     async def _invoke(self, request: SendTaskRequest) -> SendTaskResponse:
         task_send_params: TaskSendParams = request.params
-        query = self._get_user_query(task_send_params)
+        query = self.__convert_params_to_dict(task_send_params)
         try:
             result = self.agent.invoke(query, task_send_params.sessionId)
         except Exception as e:
             logger.error("Error invoking agent: %s", e)
             raise ValueError(f"Error invoking agent: {e}") from e
 
-        data = self.agent.get_image_data(
-            session_id=task_send_params.sessionId, image_key=result.raw
-        )
-        if not data.error:
-            parts = [
-                FilePart(
-                    file=FileContent(
-                        bytes=data.bytes, mimeType=data.mime_type, name=data.id
-                    )
-                )
-            ]
-        else:
-            parts = [{"type": "text", "text": data.error}]
-
+        # レスポンスは文字列で返ってくる
+        parts = [
+            TextPart(
+                text=result,
+            )
+        ]
         print(f"Final Result ===> {result}")
-        task = await self._update_store(
+        task = await self.__update_store_task(
             task_send_params.id,
             TaskStatus(state=TaskState.COMPLETED),
             [Artifact(parts=parts)],
         )
         return SendTaskResponse(id=request.id, result=task)
 
-    async def _update_store(
+    async def __update_store_task(
         self, task_id: str, status: TaskStatus, artifacts: list[Artifact]
     ) -> Task:
+        # 内部に保存しているタスクをアップデートする
+        # 処理結果を格納し直す
         async with self.lock:
         try:
             task = self.tasks[task_id]
@@ -107,9 +101,23 @@ class AgentTaskManager(InMemoryTaskManager):
 
         return task
 
-    def _get_user_query(self, task_send_params: TaskSendParams) -> str:
-        part = task_send_params.message.parts[0]
-        if not isinstance(part, TextPart):
-            raise ValueError("Only text parts are supported")
+    def __convert_params_to_dict(self, task_send_params: TaskSendParams) -> dict:
+        # TextPartのみ入力を許容。入力のクエリからテキスト情報を取得する。
+        parts = task_send_params.message.parts
+        gcs_uri: str = TaskManagerUtil.get_part_text(parts[0])
+        message: str = TaskManagerUtil.get_part_text(parts[1])
+        request_id: str = task_send_params.sessionId
+        return {
+            "gcs_uri": gcs_uri,
+            "message": message,
+            "request_id": request_id
+        }
 
-        return part.text
+
+class TaskManagerUtil:
+    @staticmethod
+    def get_part_text(part: Part) -> str:
+        if isinstance(part, TextPart):
+            return part.text
+        else:
+            raise ValueError("Only text parts are supported")

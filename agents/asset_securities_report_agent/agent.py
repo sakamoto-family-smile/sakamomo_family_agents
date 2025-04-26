@@ -9,8 +9,8 @@ from vertexai.generative_models import (
     GenerationConfig,
     GenerationResponse,
     GenerativeModel,
-    Part,
-    SafetySetting
+    SafetySetting,
+    Part as vertexai_part
 )
 from proto.marshal.collections import RepeatedComposite
 from logging import Logger, StreamHandler, getLogger
@@ -23,6 +23,7 @@ from common.types import (
     TaskStatusUpdateEvent,
     TaskArtifactUpdateEvent,
     TextPart,
+    Part,
     TaskState,
     Task,
     SendTaskResponse,
@@ -51,6 +52,19 @@ class AssetSecuritiesReportAgentConfig(BaseModel):
     log_bucket_name: str = "sakamomo_family_service"
     log_base_folder: str = "log"
     debug_mode: bool = False
+    prompt: str = """
+上記の決算資料から、後述する観点について分析を行い、下記の内容について回答してください。
+
+## 回答して欲しい内容
+
+・財務三表（損益計算書、貸借対照表、キャッシュフロー表）について、分析を行ってください。
+・今後3ヵ年で企業の収益性は良くなっていくでしょうか？その理由も述べてください。
+・直近1年で企業の株価は上昇していくでしょうか？その理由も述べてください。
+
+## 分析時の観点
+
+・貸借対照表、損益計算書、キャッシュフロー表が記載されている場合、各データについて、詳細な分析をすること
+        """
 
 
 class LLMAgentResponse(BaseModel):
@@ -101,9 +115,10 @@ class AssetSecuritiesReportAgent:
         # gcs uriからpdfデータを取得
         # TODO : 将来的に複数のデータタイプに対応させてもよさそう
         gcs_uri: str = input_data["gcs_uri"]
+        message: str = input_data["message"]
         prompt: str = input_data["prompt"]
         request_id: str = input_data["request_id"]
-        file_data = Part.from_uri(uri=gcs_uri, mime_type="application/pdf")
+        file_data = vertexai_part.from_uri(uri=gcs_uri, mime_type="application/pdf")
 
         # LLMを利用した解析処理を実施
         contents = [file_data, prompt]
@@ -131,7 +146,7 @@ class AssetSecuritiesReportAgent:
 
 
 class AgentUtil:
-    # TODO : リファクタリングする（内部関数とかをutilとかに切り出す）
+    # TODO : この処理はTaskManager側に実装した方が良いかも
     @staticmethod
     def upload_llm_log(
         work_folder: str,
