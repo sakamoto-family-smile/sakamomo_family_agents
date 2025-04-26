@@ -106,7 +106,14 @@ class AssetSecuritiesReportAgent:
         return ["text", "text/plain"]
 
     def invoke(self, query, sessionId) -> str:
-        pass
+        input_data: dict = {
+            "gcs_uri": query["gcs_uri"],
+            "message": query["message"],
+            "request_id": query["request_id"],
+            "prompt": self.config.prompt
+        }
+        response = self.__get_llm_agent_response(input_data=input_data)
+        return response.text
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
         pass

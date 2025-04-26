@@ -14,8 +14,7 @@ from common.types import (
     Task,
     TaskStatus,
     TaskState,
-    FilePart,
-    FileContent
+    Part
 )
 from common.server.task_manager import InMemoryTaskManager
 from .agent import AssetSecuritiesReportAgent
@@ -63,7 +62,7 @@ class AgentTaskManager(InMemoryTaskManager):
             logger.error("Error invoking agent: %s", e)
             raise ValueError(f"Error invoking agent: {e}") from e
 
-        # レスポンスは文字列で返ってくる
+        # レスポンスは文字列で返ってくるため、TextPartとして格納する
         parts = [
             TextPart(
                 text=result,
@@ -83,11 +82,11 @@ class AgentTaskManager(InMemoryTaskManager):
         # 内部に保存しているタスクをアップデートする
         # 処理結果を格納し直す
         async with self.lock:
-        try:
-            task = self.tasks[task_id]
-        except KeyError as exc:
-            logger.error("Task %s not found for updating the task", task_id)
-            raise ValueError(f"Task {task_id} not found") from exc
+            try:
+                task = self.tasks[task_id]
+            except KeyError as exc:
+                logger.error("Task %s not found for updating the task", task_id)
+                raise ValueError(f"Task {task_id} not found") from exc
 
         task.status = status
 
