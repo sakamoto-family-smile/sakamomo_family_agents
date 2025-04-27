@@ -13,25 +13,10 @@ from vertexai.generative_models import (
     Part as vertexai_part
 )
 from proto.marshal.collections import RepeatedComposite
-from logging import Logger, StreamHandler, getLogger
-from common.types import (
-    SendTaskRequest,
-    TaskSendParams,
-    Message,
-    TaskStatus,
-    Artifact,
-    TaskStatusUpdateEvent,
-    TaskArtifactUpdateEvent,
-    TextPart,
-    Part,
-    TaskState,
-    Task,
-    SendTaskResponse,
-    InternalError,
-    JSONRPCResponse,
-    SendTaskStreamingRequest,
-    SendTaskStreamingResponse,
-)
+from logging import StreamHandler, getLogger
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
+
 from util.gcp_util import upload_file_into_gcs
 
 
@@ -102,6 +87,11 @@ class LLMAgentResponse(BaseModel):
     metadata: dict
 
 
+class AgentWorkflowState(TypedDict):
+    company_name: str
+    gcs_uri: str
+
+
 class AssetSecuritiesReportAgent:
     def __init__(self, config: AssetSecuritiesReportAgentConfig):
         self.config = config
@@ -132,12 +122,13 @@ class AssetSecuritiesReportAgent:
         self.__work_folder = os.path.join(os.path.dirname(__file__), "work")
         os.makedirs(self.__work_folder, exist_ok=True)
 
-    def get_supported_content_types(self) -> list:
+    @staticmethod
+    def get_supported_content_types() -> list:
         return ["text", "text/plain"]
 
     def invoke(self, query, sessionId) -> str:
         input_data: dict = {
-            "gcs_uri": query["gcs_uri"],
+            "company_name": query["company_name"],
             "message": query["message"],
             "request_id": query["request_id"],
             "prompt": self.config.prompt
