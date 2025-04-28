@@ -1,4 +1,4 @@
-from typing import Any, Dict, AsyncIterable
+from typing import Any, Dict, AsyncIterable, List
 from pydantic import BaseModel
 import os
 import vertexai
@@ -12,12 +12,14 @@ from vertexai.generative_models import (
     SafetySetting,
     Part as vertexai_part
 )
+from google.cloud import bigquery
 from proto.marshal.collections import RepeatedComposite
 from logging import StreamHandler, getLogger
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 
 from util.gcp_util import upload_file_into_gcs
+from util.edinet_wrapper import EdinetUtil
 
 
 logger = getLogger(__name__)
@@ -92,6 +94,10 @@ class AgentWorkflowState(TypedDict):
     gcs_uri: str
 
 
+# TODO : 外部のデータベースにセッションを保存するように対応する
+session_store: Dict[str, AgentWorkflowState] = {}
+
+
 class AssetSecuritiesReportAgent:
     def __init__(self, config: AssetSecuritiesReportAgentConfig):
         self.config = config
@@ -138,6 +144,50 @@ class AssetSecuritiesReportAgent:
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
         pass
+
+    def get_workflow(self) -> StateGraph:
+        graph_builder = StateGraph(AgentWorkflowState)
+        pass
+
+    def __extract_company_name(self, query: str) -> str:
+        prompt = f"""
+下記から企業名のみを抽出してください。ただし、ルールに沿って抽出をしてください。
+
+★文章
+{query}
+
+★ルール
+・企業名以外は出力しないでください。
+・複数の企業名が抽出できた場合は、最初に抽出した企業名のみを出力してください。
+        """
+        response = self.__model.generate_content(contents=[prompt])
+
+        # TDDO : 企業名が正しく出力できるようにバリデーションやフォーマット指定を行いたい
+        return response.text
+
+    def __search_financial_report_url_in_bq_table(self, company_name: str) -> List[dict]:
+        # 会社名から、bigqueryを検索し、有価証券報告書のリストを取得する
+        client = bigquery.Client()
+        items: List[dict] = []
+        with open(os.path.join(os.path.dirname(__file__), "sql", "search_company.sql"), "r") as f:
+            query = f.read().format(company_name=company_name)
+            query_job = client.query(query)
+            rows = query_job.result()
+            for row in rows:
+                doc_id = row["docID"]
+                item = {
+                    "doc_id": doc_id,
+                    "filer_name": row["filerName"],
+                    "doc_description": row["docDescription"],
+                    "doc_url": f"{EdinetUtil.get_document_url_from_doc_id(doc_id=doc_id)}",
+                }
+                items.append(item)
+
+        # 企業の件数が0件の場合は例外を発火
+        if len(items) == 0:
+            raise ValueError(f"no documents found for {company_name}")
+
+        return items
 
     def __get_llm_agent_response(self, input_data: dict):
         # gcs uriからpdfデータを取得
