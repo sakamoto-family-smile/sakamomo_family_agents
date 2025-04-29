@@ -17,6 +17,7 @@ from proto.marshal.collections import RepeatedComposite
 from logging import StreamHandler, getLogger
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
 
 from util.gcp_util import upload_file_into_gcs
 from util.edinet_wrapper import EdinetUtil
@@ -39,7 +40,7 @@ class AssetSecuritiesReportAgentConfig(BaseModel):
     log_bucket_name: str = "sakamomo_family_service"
     log_base_folder: str = "log"
     debug_mode: bool = False
-    prompt: str = """
+    analyze_prompt: str = """
 上記の決算資料から、後述する観点についてそれぞれ分析を行なって、分析結果をまとめてください。
 
 1. 経営戦略と事業内容:
@@ -84,18 +85,16 @@ class AssetSecuritiesReportAgentConfig(BaseModel):
         """
 
 
-class LLMAgentResponse(BaseModel):
-    text: str
-    metadata: dict
-
-
 class AgentWorkflowState(TypedDict):
+    session_id: str
+    message: str
     company_name: str
-    gcs_uri: str
+    report_gcs_uri: str
 
 
 # TODO : 外部のデータベースにセッションを保存するように対応する
 session_store: Dict[str, AgentWorkflowState] = {}
+memory = MemorySaver()
 
 
 class AssetSecuritiesReportAgent:
@@ -128,26 +127,92 @@ class AssetSecuritiesReportAgent:
         self.__work_folder = os.path.join(os.path.dirname(__file__), "work")
         os.makedirs(self.__work_folder, exist_ok=True)
 
+        # graphの生成
+        self.__graph = self.get_workflow()
+
     @staticmethod
     def get_supported_content_types() -> list:
         return ["text", "text/plain"]
 
     def invoke(self, query, sessionId) -> str:
+        message = query["message"]
+        if sessionId in session_store:
+            # すでに有価証券報告書を取得済みの場合
+            pass
+        else:
+            # まだ有価証券報告書を取得していない場合
+            pass
+
         input_data: dict = {
             "company_name": query["company_name"],
             "message": query["message"],
             "request_id": query["request_id"],
-            "prompt": self.config.prompt
+            "prompt": self.config.analyze_prompt
         }
-        response = self.__get_llm_agent_response(input_data=input_data)
+        response = self.__analyze_financial_report(input_data=input_data)
         return response.text
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
         pass
 
-    def get_workflow(self) -> StateGraph:
-        graph_builder = StateGraph(AgentWorkflowState)
-        pass
+    def get_workflow(self, memory_server) -> StateGraph:
+        builder = StateGraph(AgentWorkflowState)
+        builder.set_entry_point(START)
+        builder.set_finish_point(END)
+        builder.add_node("routing", self.__finish_search_report)
+        builder.add_node("extract_company_name", self.__extract_company_name_node)
+        builder.add_node("search_financial_report", self.__search_financial_report_node)
+        builder.add_node("analyze_report", self.__analyze_report_node)
+        builder.add_conditional_edges(START,
+                                      self.__finish_search_report,
+                                      {
+                                          "analyze_report": "analyze_report",
+                                          "extract_company_name": "extract_company_name"
+                                      })
+        builder.add_edge("extract_company_name", "search_financial_report")
+        builder.add_edge("analyze_report", END)
+        builder.add_edge("search_financial_report", END)
+        return builder.compile(checkpointer=memory_server)
+
+    def __finish_search_report(self, state: AgentWorkflowState) -> str:
+        gcs_uri = state["report_gcs_uri"]
+        if gcs_uri is not None:
+            # すでに取得済みの有価証券報告書がある場合は、分析処理を行う
+            return "analyze_report"
+        else:
+            # まだ取得していない場合は、企業名の取得から行う
+            return "extract_company_name"
+
+    def __extract_company_name_node(self, state: AgentWorkflowState) -> dict:
+        # 企業名を抽出する処理
+        company_name = self.__extract_company_name(query=state["message"])
+        return {
+            "company_name": company_name
+        }
+
+    def __search_financial_report_node(self, state: AgentWorkflowState) -> dict:
+        # 有価証券報告書のuriをデータベースから検索する
+        items = self.__search_financial_report_url_in_bq_table(state["company_name"])
+
+        # TODO : LLMなどを使って、有価証券報告書を選定する
+        return {
+            "report_gcs_uri": items[0]
+        }
+
+    def __analyze_report_node(self, state: AgentWorkflowState) -> dict:
+        # 有価証券報告書の分析を行う
+        message = state["message"]
+        gcs_uri = state["report_gcs_uri"]
+        response = self.__analyze_financial_report(
+            gcs_uri=gcs_uri,
+            message=message,
+            prompt=self.config.analyze_prompt,
+            request_id=state["session_id"],
+            timestamp=datetime.now()
+        )
+        return {
+            "response": response
+        }
 
     def __extract_company_name(self, query: str) -> str:
         prompt = f"""
@@ -187,15 +252,16 @@ class AssetSecuritiesReportAgent:
         if len(items) == 0:
             raise ValueError(f"no documents found for {company_name}")
 
+        # TODO : 最新の有価証券報告書をとるように修正（LLMに判断させる？）
         return items
 
-    def __get_llm_agent_response(self, input_data: dict):
+    def __analyze_financial_report(self,
+                                   gcs_uri: str,
+                                   message: str,  # TODO : messageを使うように修正が必要
+                                   prompt: str,
+                                   request_id: str,
+                                   timestamp: datetime) -> str:
         # gcs uriからpdfデータを取得
-        # TODO : 将来的に複数のデータタイプに対応させてもよさそう
-        gcs_uri: str = input_data["gcs_uri"]
-        message: str = input_data["message"]
-        prompt: str = input_data["prompt"]
-        request_id: str = input_data["request_id"]
         file_data = vertexai_part.from_uri(uri=gcs_uri, mime_type="application/pdf")
 
         # LLMを利用した解析処理を実施
@@ -206,6 +272,7 @@ class AssetSecuritiesReportAgent:
         )
 
         # 解析結果含めて、ログとして出力
+        # TODO : パラメーターにcompany_nameなども追加したい
         AgentUtil.upload_llm_log(
             work_folder=self.__work_folder,
             log_bucket_name=self.__config.log_bucket_name,
@@ -215,12 +282,12 @@ class AssetSecuritiesReportAgent:
             response=response,
             request_id=request_id,
             prompt=prompt,
-            timestamp=input_data["timestamp"],
+            timestamp=timestamp,
             gcs_uri=gcs_uri
         )
 
         # 解析結果を返す
-        return LLMAgentResponse(text=response.text, metadata={})
+        return response.text
 
 
 class AgentUtil:
