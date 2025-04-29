@@ -128,7 +128,7 @@ class AssetSecuritiesReportAgent:
         os.makedirs(self.__work_folder, exist_ok=True)
 
         # graphの生成
-        self.__graph = self.get_workflow()
+        self.__graph = self.get_workflow(memory_server=memory)
 
     @staticmethod
     def get_supported_content_types() -> list:
@@ -136,35 +136,32 @@ class AssetSecuritiesReportAgent:
 
     def invoke(self, query, sessionId) -> str:
         message = query["message"]
-        if sessionId in session_store:
-            # すでに有価証券報告書を取得済みの場合
-            pass
-        else:
-            # まだ有価証券報告書を取得していない場合
-            pass
-
-        input_data: dict = {
-            "company_name": query["company_name"],
-            "message": query["message"],
-            "request_id": query["request_id"],
-            "prompt": self.config.analyze_prompt
+        config = {
+            "configurable": {"thread_id": sessionId}
         }
-        response = self.__analyze_financial_report(input_data=input_data)
-        return response.text
+        self.__graph.invoke(
+            {
+                "message": message,
+                "session_id": sessionId,
+            },
+            config
+        )
+        state = self.__graph.get_state(config)
+        return state.values.get("response")
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
         pass
 
-    def get_workflow(self, memory_server) -> StateGraph:
+    def get_workflow(self, memory_server):
         builder = StateGraph(AgentWorkflowState)
         builder.set_entry_point(START)
         builder.set_finish_point(END)
-        builder.add_node("routing", self.__finish_search_report)
+        builder.add_node("routing", self.__routing_node)
         builder.add_node("extract_company_name", self.__extract_company_name_node)
         builder.add_node("search_financial_report", self.__search_financial_report_node)
         builder.add_node("analyze_report", self.__analyze_report_node)
         builder.add_conditional_edges(START,
-                                      self.__finish_search_report,
+                                      self.__routing_node,
                                       {
                                           "analyze_report": "analyze_report",
                                           "extract_company_name": "extract_company_name"
@@ -174,7 +171,8 @@ class AssetSecuritiesReportAgent:
         builder.add_edge("search_financial_report", END)
         return builder.compile(checkpointer=memory_server)
 
-    def __finish_search_report(self, state: AgentWorkflowState) -> str:
+    def __routing_node(self, state: AgentWorkflowState) -> str:
+        # TODO : LLMを使って、ルーティングしても良さそう（有価証券報告書の分析と検索のどちらかでルーティング）
         gcs_uri = state["report_gcs_uri"]
         if gcs_uri is not None:
             # すでに取得済みの有価証券報告書がある場合は、分析処理を行う
@@ -196,7 +194,8 @@ class AssetSecuritiesReportAgent:
 
         # TODO : LLMなどを使って、有価証券報告書を選定する
         return {
-            "report_gcs_uri": items[0]
+            "report_gcs_uri": items[0],
+            "response": f"この有価証券報告書のURIを分析対象として良いですか？ {items[0]}"
         }
 
     def __analyze_report_node(self, state: AgentWorkflowState) -> dict:
