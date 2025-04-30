@@ -97,6 +97,7 @@ session_store: Dict[str, AgentWorkflowState] = {}
 memory = MemorySaver()
 
 
+# TODO : Host Agent（ReActとか）を使って、前段でよしなに解釈させてしまうのはありかも（ワークフローだとかえって面倒）
 class AssetSecuritiesReportAgent:
     def __init__(self, config: AssetSecuritiesReportAgentConfig):
         self.config = config
@@ -163,22 +164,50 @@ class AssetSecuritiesReportAgent:
         builder.add_conditional_edges(START,
                                       self.__routing_node,
                                       {
+                                          "ask_human": "ask_human",
                                           "analyze_report": "analyze_report",
                                           "extract_company_name": "extract_company_name"
                                       })
         builder.add_edge("extract_company_name", "search_financial_report")
         builder.add_edge("analyze_report", END)
         builder.add_edge("search_financial_report", END)
+        builder.add_edge("ask_human", END)
+        # TODO : analyze_reportの後に終了処理として、gcs_uriのリセットとかが必要かも？（要検討）
         return builder.compile(checkpointer=memory_server)
 
     def __routing_node(self, state: AgentWorkflowState) -> str:
         # TODO : LLMを使って、ルーティングしても良さそう（有価証券報告書の分析と検索のどちらかでルーティング）
+
+        # どの処理を行うか？をエージェントで選定
+        prompt = f"""
+あなたは下記の3つの手段をもっており、ユーザーからのメッセージに対して、どれを実行するか？を決定することが出来ます。
+ルールに則って、メッセージから実行すべき手段を選定してください。
+
+★手段
+・有価証券報告書の分析（analyze_report）
+・有価証券報告書の検索（extract_company_name）
+・どの企業を分析したいかをユーザーに質問（ask_human）
+
+★ルール
+A, B, Cのどれかのみを出力するようにしてください。
+※他のメッセージや内容は出力しないでください。
+
+★メッセージ
+{state["message"]}
+        """
+        response = self.__model.generate_content(contents=[prompt])
+
+        # ルールを使って、最終的なルーティングを実施
+        node_name = response.text
         gcs_uri = state["report_gcs_uri"]
-        if gcs_uri is not None:
+        if node_name == "analyze_report" and gcs_uri is not None:
             # すでに取得済みの有価証券報告書がある場合は、分析処理を行う
             return "analyze_report"
+        elif node_name == "ask_human":
+            # ユーザーへの質問を実施
+            return "ask_human"
         else:
-            # まだ取得していない場合は、企業名の取得から行う
+            # 上記以外は、企業名の抽出を行い、レポート検索を行う
             return "extract_company_name"
 
     def __extract_company_name_node(self, state: AgentWorkflowState) -> dict:
@@ -211,6 +240,12 @@ class AssetSecuritiesReportAgent:
         )
         return {
             "response": response
+        }
+
+    def __ask_human_node(self, state: AgentWorkflowState) -> dict:
+        # ユーザーへの質問を実施
+        return {
+            "response": "どの企業の分析をしたいかを教えてください。"
         }
 
     def __extract_company_name(self, query: str) -> str:

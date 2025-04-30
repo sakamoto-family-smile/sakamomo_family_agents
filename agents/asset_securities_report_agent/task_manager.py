@@ -103,11 +103,9 @@ class AgentTaskManager(InMemoryTaskManager):
     def __convert_params_to_dict(self, task_send_params: TaskSendParams) -> dict:
         # TextPartのみ入力を許容。入力のクエリからテキスト情報を取得する。
         parts = task_send_params.message.parts
-        gcs_uri: str = TaskManagerUtil.get_part_text(parts[0])
-        message: str = TaskManagerUtil.get_part_text(parts[1])
+        message: str = TaskManagerUtil.get_part_text(parts[0])
         request_id: str = task_send_params.sessionId
         return {
-            "gcs_uri": gcs_uri,
             "message": message,
             "request_id": request_id
         }
