@@ -17,7 +17,7 @@ from common.types import (
     Part
 )
 from common.server.task_manager import InMemoryTaskManager
-from .agent import AssetSecuritiesReportAgent
+from agent import AssetSecuritiesReportAgent
 
 
 logger = logging.getLogger(__name__)

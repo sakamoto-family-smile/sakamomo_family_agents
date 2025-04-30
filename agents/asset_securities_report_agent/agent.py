@@ -33,7 +33,7 @@ class AssetSecuritiesReportAgentConfig(BaseModel):
     agent_description: str = "This agent generates a report on asset securities."
     agent_type: str = "reporting"
     agent_version: str = "0.0.1"
-    agent_author = "shota.sakamoto"
+    agent_author: str = "shota.sakamoto"
     agent_author_email: str = ""
     llm_model_name: str = "gemini-1.5-flash"
     temperature: int = 0
