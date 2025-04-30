@@ -13,7 +13,6 @@ dependencies = [
     "langchain_google_vertexai",
     "langchain-google-firestore",
     "firebase_admin",
-    "pysen[lint]",
     "google-cloud-bigquery",
     "google-cloud-storage",
     "google-cloud-aiplatform",
