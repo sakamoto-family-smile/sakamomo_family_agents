@@ -68,6 +68,7 @@ def main(host, port):
 
         config = AssetSecuritiesReportAgentConfig(
             log_bucket_name=str(os.getenv("GCS_LOG_BUCKET_NAME")),
+            llm_model_name=str(os.getenv("LLM_MODEL_NAME")),
         )
         server = A2AServer(
             agent_card=agent_card,

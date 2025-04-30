@@ -56,6 +56,10 @@ class AgentTaskManager(InMemoryTaskManager):
     async def _invoke(self, request: SendTaskRequest) -> SendTaskResponse:
         task_send_params: TaskSendParams = request.params
         query = self.__convert_params_to_dict(task_send_params)
+
+        # debug
+        logger.info("sessionId: %s, query: %s", task_send_params.sessionId, query)
+
         try:
             result = self.agent.invoke(query, task_send_params.sessionId)
         except Exception as e:

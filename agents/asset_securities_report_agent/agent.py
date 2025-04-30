@@ -35,7 +35,7 @@ class AssetSecuritiesReportAgentConfig(BaseModel):
     agent_version: str = "0.0.1"
     agent_author: str = "shota.sakamoto"
     agent_author_email: str = ""
-    llm_model_name: str = "gemini-1.5-flash"
+    llm_model_name: str = "gemini-1.5-flash-001"
     temperature: int = 0
     log_bucket_name: str = "sakamomo_family_service"
     log_base_folder: str = "log"
@@ -198,8 +198,9 @@ A, B, Cのどれかのみを出力するようにしてください。
 
         # ルールを使って、最終的なルーティングを実施
         node_name = response.text
-        gcs_uri = state["report_gcs_uri"]
-        if node_name == "analyze_report" and gcs_uri is not None:
+        finish_search = "report_gcs_uri" in state
+        # gcs_uri = state["report_gcs_uri"]
+        if node_name == "analyze_report" and finish_search:
             # すでに取得済みの有価証券報告書がある場合は、分析処理を行う
             return "analyze_report"
         elif node_name == "ask_human":
