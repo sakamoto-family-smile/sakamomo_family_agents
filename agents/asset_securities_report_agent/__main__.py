@@ -30,8 +30,8 @@ def main(host, port):
             raise MissingAPIKeyError("GOOGLE_API_KEY environment variable not set.")
         if not os.getenv("EDINET_API_KEY"):
             raise MissingAPIKeyError("EDINET_API_KEY environment variable not set.")
-        if not os.getenv("GOOGLE_CLOUD_PROJECT"):
-            raise MissingAPIKeyError("GOOGLE_CLOUD_PROJECT environment variable not set.")
+        if not os.getenv("GCP_PROJECT"):
+            raise MissingAPIKeyError("GCP_PROJECT environment variable not set.")
         if not os.getenv("GCS_LOG_BUCKET_NAME"):
             raise MissingAPIKeyError("GCS_LOG_BUCKET_NAME environment variable not set.")
         if not os.getenv("LLM_MODEL_NAME"):

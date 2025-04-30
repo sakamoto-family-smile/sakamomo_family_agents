@@ -1,4 +1,4 @@
-from typing import Any, Dict, AsyncIterable, List
+from typing import Any, Dict, AsyncIterable, List, Literal
 from pydantic import BaseModel
 import os
 import vertexai
@@ -155,12 +155,13 @@ class AssetSecuritiesReportAgent:
 
     def get_workflow(self, memory_server):
         builder = StateGraph(AgentWorkflowState)
-        builder.set_entry_point(START)
-        builder.set_finish_point(END)
+        # builder.set_entry_point(START)
+        # builder.set_finish_point(END)
         builder.add_node("routing", self.__routing_node)
         builder.add_node("extract_company_name", self.__extract_company_name_node)
         builder.add_node("search_financial_report", self.__search_financial_report_node)
         builder.add_node("analyze_report", self.__analyze_report_node)
+        builder.add_node("ask_human", self.__ask_human_node)
         builder.add_conditional_edges(START,
                                       self.__routing_node,
                                       {
@@ -175,9 +176,7 @@ class AssetSecuritiesReportAgent:
         # TODO : analyze_reportの後に終了処理として、gcs_uriのリセットとかが必要かも？（要検討）
         return builder.compile(checkpointer=memory_server)
 
-    def __routing_node(self, state: AgentWorkflowState) -> str:
-        # TODO : LLMを使って、ルーティングしても良さそう（有価証券報告書の分析と検索のどちらかでルーティング）
-
+    def __routing_node(self, state: AgentWorkflowState) -> Literal["analyze_report", "extract_company_name", "ask_human"]:
         # どの処理を行うか？をエージェントで選定
         prompt = f"""
 あなたは下記の3つの手段をもっており、ユーザーからのメッセージに対して、どれを実行するか？を決定することが出来ます。
