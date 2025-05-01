@@ -72,7 +72,7 @@ class AgentTaskManager(InMemoryTaskManager):
                 text=result,
             )
         ]
-        print(f"Final Result ===> {result}")
+        logger.info(f"Final Result ===> {result}")
         task = await self.__update_store_task(
             task_send_params.id,
             TaskStatus(state=TaskState.COMPLETED),

@@ -18,14 +18,15 @@ from logging import StreamHandler, getLogger
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.state import CompiledStateGraph
 
 from util.gcp_util import upload_file_into_gcs
 from util.edinet_wrapper import EdinetUtil
 
 
 logger = getLogger(__name__)
-logger.addHandler(StreamHandler())
-logger.setLevel("DEBUG")
+# logger.addHandler(StreamHandler())
+# logger.setLevel("DEBUG")
 
 
 class AssetSecuritiesReportAgentConfig(BaseModel):
@@ -89,7 +90,9 @@ class AgentWorkflowState(TypedDict):
     session_id: str
     message: str
     company_name: str
+    report_company_name: str
     report_gcs_uri: str
+    report_title: str
 
 
 # TODO : 外部のデータベースにセッションを保存するように対応する
@@ -148,12 +151,16 @@ class AssetSecuritiesReportAgent:
             config
         )
         state = self.__graph.get_state(config)
+
+        # debug
+        logger.info("sessionId: %s, state: %s", sessionId, state)
+
         return state.values.get("response")
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
         pass
 
-    def get_workflow(self, memory_server):
+    def get_workflow(self, memory_server) -> CompiledStateGraph:
         builder = StateGraph(AgentWorkflowState)
         # builder.set_entry_point(START)
         # builder.set_finish_point(END)
@@ -198,7 +205,13 @@ A, B, Cのどれかのみを出力するようにしてください。
 
         # ルールを使って、最終的なルーティングを実施
         node_name = response.text
-        finish_search = "report_gcs_uri" in state
+        session_id = state["session_id"]
+        if session_id in session_store:
+            state_of_history = session_store[session_id]
+            finish_search = "report_gcs_uri" in state_of_history
+        else:
+            finish_search = False
+
         # gcs_uri = state["report_gcs_uri"]
         if node_name == "analyze_report" and finish_search:
             # すでに取得済みの有価証券報告書がある場合は、分析処理を行う
@@ -213,6 +226,10 @@ A, B, Cのどれかのみを出力するようにしてください。
     def __extract_company_name_node(self, state: AgentWorkflowState) -> dict:
         # 企業名を抽出する処理
         company_name = self.__extract_company_name(query=state["message"])
+
+        # debug
+        logger.info("company_name: %s", company_name)
+
         return {
             "company_name": company_name
         }
@@ -222,10 +239,28 @@ A, B, Cのどれかのみを出力するようにしてください。
         items = self.__search_financial_report_url_in_bq_table(state["company_name"])
 
         # TODO : LLMなどを使って、有価証券報告書を選定する
-        return {
-            "report_gcs_uri": items[0],
-            "response": f"この有価証券報告書のURIを分析対象として良いですか？ {items[0]}"
+        item = items[0]
+        res = {
+            "report_company_name": item["filer_name"],
+            "report_title": item["doc_description"],
+            "report_gcs_uri": item["doc_url"],
         }
+        res["response"] = f"この有価証券報告書のURIを分析対象として良いですか？ {item['filer_name']}"
+
+        # debug
+        logger.info("search financial report response: %s", res)
+
+        # sessionとして保存
+        session_store[state["session_id"]] = {
+            "session_id": state["session_id"],
+            "message": state["message"],
+            "company_name": state["company_name"],
+            "report_company_name": res["report_company_name"],
+            "report_title": res["report_title"],
+            "report_gcs_uri": res["report_gcs_uri"]
+        }
+
+        return res
 
     def __analyze_report_node(self, state: AgentWorkflowState) -> dict:
         # 有価証券報告書の分析を行う
@@ -257,12 +292,14 @@ A, B, Cのどれかのみを出力するようにしてください。
 
 ★ルール
 ・企業名以外は出力しないでください。
+・末尾に改行や空白をいれないでください。
 ・複数の企業名が抽出できた場合は、最初に抽出した企業名のみを出力してください。
         """
         response = self.__model.generate_content(contents=[prompt])
+        company_name = response.text.rstrip().rstrip('\r\n')
 
         # TDDO : 企業名が正しく出力できるようにバリデーションやフォーマット指定を行いたい
-        return response.text
+        return company_name
 
     def __search_financial_report_url_in_bq_table(self, company_name: str) -> List[dict]:
         # 会社名から、bigqueryを検索し、有価証券報告書のリストを取得する
@@ -270,6 +307,10 @@ A, B, Cのどれかのみを出力するようにしてください。
         items: List[dict] = []
         with open(os.path.join(os.path.dirname(__file__), "sql", "search_company.sql"), "r") as f:
             query = f.read().format(company_name=company_name)
+
+            # debug
+            logger.info("serch company report query: %s", query)
+
             query_job = client.query(query)
             rows = query_job.result()
             for row in rows:
