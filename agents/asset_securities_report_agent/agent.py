@@ -93,6 +93,7 @@ class AgentWorkflowState(TypedDict):
     report_company_name: str
     report_gcs_uri: str
     report_title: str
+    response: str
 
 
 # TODO : 外部のデータベースにセッションを保存するように対応する
@@ -153,7 +154,9 @@ class AssetSecuritiesReportAgent:
         state = self.__graph.get_state(config)
 
         # debug
-        logger.info("sessionId: %s, state: %s", sessionId, state)
+        logger.info("invoke: sessionId: %s, state: %s", sessionId, state)
+        res = state.values.get("response")
+        logger.info("invoke: res = %s", res)
 
         return state.values.get("response")
 
@@ -257,7 +260,7 @@ A, B, Cのどれかのみを出力するようにしてください。
             "company_name": state["company_name"],
             "report_company_name": res["report_company_name"],
             "report_title": res["report_title"],
-            "report_gcs_uri": res["report_gcs_uri"]
+            "report_gcs_uri": res["report_gcs_uri"],
         }
 
         return res
