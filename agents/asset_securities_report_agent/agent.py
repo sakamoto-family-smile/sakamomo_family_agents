@@ -23,6 +23,10 @@ from langgraph.graph.state import CompiledStateGraph
 from util.gcp_util import upload_file_into_gcs
 from util.edinet_wrapper import EdinetUtil
 
+from common.types import (
+    TaskState,
+)
+
 
 logger = getLogger(__name__)
 # logger.addHandler(StreamHandler())
@@ -94,6 +98,13 @@ class AgentWorkflowState(TypedDict):
     report_gcs_uri: str
     report_title: str
     response: str
+    task_state: TaskState
+
+
+class AgentResponse(TypedDict):
+    session_id: str
+    response: str
+    task_state: TaskState
 
 
 # TODO : 外部のデータベースにセッションを保存するように対応する
@@ -139,26 +150,38 @@ class AssetSecuritiesReportAgent:
     def get_supported_content_types() -> list:
         return ["text", "text/plain"]
 
-    def invoke(self, query, sessionId) -> str:
+    def invoke(self, query, sessionId) -> AgentResponse:
         message = query["message"]
         config = {
             "configurable": {"thread_id": sessionId}
         }
-        self.__graph.invoke(
-            {
-                "message": message,
-                "session_id": sessionId,
-            },
-            config
-        )
-        state = self.__graph.get_state(config)
+        try:
+            self.__graph.invoke(
+                {
+                    "message": message,
+                    "session_id": sessionId,
+                },
+                config
+            )
+            state = self.__graph.get_state(config)
+        except Exception as e:
+            # TODO : エラー用にstateを書き換える
+            logger.error("Error invoking agent: %s", e)
+            state = self.__graph.get_state(config)
+            state.values["response"] = f"エラーが発生したため、処理が失敗しました"
+            state.values["task_state"] = TaskState.FAILED
 
         # debug
         logger.info("invoke: sessionId: %s, state: %s", sessionId, state)
         res = state.values.get("response")
         logger.info("invoke: res = %s", res)
 
-        return state.values.get("response")
+        response = AgentResponse(
+            session_id=sessionId,
+            response=state.values.get("response"),
+            task_state=state.values.get("task_state")
+        )
+        return response
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
         pass
@@ -247,6 +270,7 @@ A, B, Cのどれかのみを出力するようにしてください。
             "report_company_name": item["filer_name"],
             "report_title": item["doc_description"],
             "report_gcs_uri": item["doc_url"],
+            "task_state": TaskState.INPUT_REQUIRED
         }
         res["response"] = f"この有価証券報告書のURIを分析対象として良いですか？ {item['filer_name']}"
 
@@ -261,6 +285,7 @@ A, B, Cのどれかのみを出力するようにしてください。
             "report_company_name": res["report_company_name"],
             "report_title": res["report_title"],
             "report_gcs_uri": res["report_gcs_uri"],
+            "task_state": TaskState.INPUT_REQUIRED
         }
 
         return res
@@ -277,13 +302,15 @@ A, B, Cのどれかのみを出力するようにしてください。
             timestamp=datetime.now()
         )
         return {
-            "response": response
+            "response": response,
+            "task_state": TaskState.COMPLETED
         }
 
     def __ask_human_node(self, state: AgentWorkflowState) -> dict:
         # ユーザーへの質問を実施
         return {
-            "response": "どの企業の分析をしたいかを教えてください。"
+            "response": "どの企業の分析をしたいかを教えてください。",
+            "task_state": TaskState.INPUT_REQUIRED
         }
 
     def __extract_company_name(self, query: str) -> str:

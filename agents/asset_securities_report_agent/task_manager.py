@@ -69,13 +69,13 @@ class AgentTaskManager(InMemoryTaskManager):
         # レスポンスは文字列で返ってくるため、TextPartとして格納する
         parts = [
             TextPart(
-                text=result,
+                text=result["response"],
             )
         ]
         logger.info(f"Final Result ===> {result}")
         task = await self.__update_store_task(
             task_send_params.id,
-            TaskStatus(state=TaskState.COMPLETED),
+            TaskStatus(state=result["task_state"]),
             [Artifact(parts=parts)],
         )
         return SendTaskResponse(id=request.id, result=task)
