@@ -21,7 +21,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
 from util.gcp_util import upload_file_into_gcs
-from util.edinet_wrapper import EdinetUtil
+from util.edinet_wrapper import EdinetUtil, EdinetWrapper
 
 from common.types import (
     TaskState,
@@ -146,6 +146,14 @@ class AssetSecuritiesReportAgent:
         # graphの生成
         self.__graph = self.get_workflow(memory_server=memory)
 
+        # edinet wrapperの初期化
+        self.__output_folder = os.path.join(os.path.dirname(__file__), "output")
+        os.makedirs(self.__output_folder, exist_ok=True)
+        self.__edinet_wrapper = EdinetWrapper(
+            api_key=os.environ["EDINET_API_KEY"],
+            output_folder=self.__output_folder
+        )
+
     @staticmethod
     def get_supported_content_types() -> list:
         return ["text", "text/plain"]
@@ -221,8 +229,12 @@ class AssetSecuritiesReportAgent:
 ・どの企業を分析したいかをユーザーに質問（ask_human）
 
 ★ルール
-A, B, Cのどれかのみを出力するようにしてください。
+下記のどれかのみを出力するようにしてください。
 ※他のメッセージや内容は出力しないでください。
+
+analyze_report
+extract_company_name
+ask_human
 
 ★メッセージ
 {state["message"]}
@@ -230,7 +242,7 @@ A, B, Cのどれかのみを出力するようにしてください。
         response = self.__model.generate_content(contents=[prompt])
 
         # ルールを使って、最終的なルーティングを実施
-        node_name = response.text
+        node_name = response.text.strip()
         session_id = state["session_id"]
         if session_id in session_store:
             state_of_history = session_store[session_id]
@@ -238,16 +250,24 @@ A, B, Cのどれかのみを出力するようにしてください。
         else:
             finish_search = False
 
-        # gcs_uri = state["report_gcs_uri"]
+        # debug
+        logger.info("routing node name: %s", node_name)
+        logger.info("routing finish_search: %s", finish_search)
+        logger.info("routing session_store: %s", session_store)
+        logger.info("gcs_uri: %s", state["report_gcs_uri"])
+
         if node_name == "analyze_report" and finish_search:
             # すでに取得済みの有価証券報告書がある場合は、分析処理を行う
             return "analyze_report"
         elif node_name == "ask_human":
             # ユーザーへの質問を実施
             return "ask_human"
-        else:
+        elif node_name == "extract_company_name":
             # 上記以外は、企業名の抽出を行い、レポート検索を行う
             return "extract_company_name"
+        else:
+            # それ以外の名前の場合は、例外として発火する
+            raise ValueError(f"Invalid node name: {node_name}")
 
     def __extract_company_name_node(self, state: AgentWorkflowState) -> dict:
         # 企業名を抽出する処理
@@ -264,12 +284,24 @@ A, B, Cのどれかのみを出力するようにしてください。
         # 有価証券報告書のuriをデータベースから検索する
         items = self.__search_financial_report_url_in_bq_table(state["company_name"])
 
-        # TODO : LLMなどを使って、有価証券報告書を選定する
+        # もしドキュメントがない場合は、ドキュメントがない旨を通知
+        # TODO : 現状はエラーとして通知ではなく、例外発火している（ちゃんとエラーハンドリングをする）
+        if len(items) == 0:
+            raise ValueError(f"no documents found for {state['company_name']}")
+
+        # gcsにdocumentをアップロードする
         item = items[0]
+        gcs_uri = self.__upload_financial_report_into_gcs(
+            edinet_doc_id=item["doc_id"],
+            current_time=datetime.now(),
+            request_id=state["session_id"]
+        )
+
+        # TODO : LLMなどを使って、有価証券報告書を選定する
         res = {
             "report_company_name": item["filer_name"],
             "report_title": item["doc_description"],
-            "report_gcs_uri": item["doc_url"],
+            "report_gcs_uri": gcs_uri,
             "task_state": TaskState.INPUT_REQUIRED
         }
         res["response"] = f"この有価証券報告書のURIを分析対象として良いですか？ {item['filer_name']}"
@@ -291,6 +323,9 @@ A, B, Cのどれかのみを出力するようにしてください。
         return res
 
     def __analyze_report_node(self, state: AgentWorkflowState) -> dict:
+        # debug
+        logger.info("start analyze report node")
+
         # 有価証券報告書の分析を行う
         message = state["message"]
         gcs_uri = state["report_gcs_uri"]
@@ -393,6 +428,26 @@ A, B, Cのどれかのみを出力するようにしてください。
 
         # 解析結果を返す
         return response.text
+
+    def __upload_financial_report_into_gcs(self,
+                                           edinet_doc_id: str,
+                                           current_time: datetime,
+                                           request_id: str) -> str:
+        # doc_idからpdfレポートを取得。取得できない場合は例外が発火される
+        file_path = self.__edinet_wrapper.download_pdf_of_financial_report(doc_id=edinet_doc_id)
+
+        # 取得したpdfを、gcsにアップロードする
+        file_name = os.path.basename(file_path)
+        current_time_str = current_time.strftime("%Y%m%d%H%M%S")
+        gcs_file_path = f"document/{current_time_str}/{request_id}/{file_name}"
+        gcs_uri = upload_file_into_gcs(
+            project_id=os.environ["GCP_PROJECT"],
+            bucket_name=self.__config.log_bucket_name,
+            remote_file_path=gcs_file_path,
+            local_file_path=file_path,
+        )
+
+        return gcs_uri
 
 
 class AgentUtil:
