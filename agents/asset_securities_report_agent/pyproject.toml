@@ -1,0 +1,31 @@
+[project]
+name = "asset-securities-report-agent"
+version = "0.1.0"
+description = "The agent which analyze the financial report hosted as an A2A server."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "a2a-sdk",
+    "click>=8.1.8",
+    "google-adk>=0.0.3",
+    "google-genai>=1.9.0",
+    "python-dotenv>=1.1.0",
+    "langchain_google_vertexai",
+    "langchain-google-firestore",
+    "langgraph",
+    "pandas",
+    "firebase_admin",
+    "google-cloud-bigquery",
+    "google-cloud-storage",
+    "google-cloud-aiplatform",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.uv.sources]
+a2a-sdk = { path = "../../a2a_sdk", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
