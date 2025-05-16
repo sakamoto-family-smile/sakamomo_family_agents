@@ -56,7 +56,7 @@ class A2AClient:
             try:
                 # Image generation could take time, adding timeout
                 response = await client.post(
-                    self.url, json=request.model_dump(), timeout=30
+                    self.url, json=request.model_dump(), timeout=60  # TODO : タイムアウトを外部から設定できるようにしたい
                 )
                 response.raise_for_status()
                 return response.json()

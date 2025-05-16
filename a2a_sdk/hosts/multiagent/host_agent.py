@@ -4,7 +4,7 @@ import functools
 import json
 import uuid
 import threading
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Any
 
 from google.genai import types
 import base64
@@ -13,6 +13,7 @@ from google.adk import Agent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.agents.callback_context import CallbackContext
+from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 from .remote_agent_connection import (
     RemoteAgentConnections,
@@ -30,6 +31,12 @@ from common.types import (
     Part,
     TaskStatusUpdateEvent,
 )
+
+
+# debug
+from logging import getLogger
+# logger = getLogger(__name__)
+logger = getLogger("uvicorn")
 
 
 class HostAgent:
@@ -73,6 +80,8 @@ class HostAgent:
         name="host_agent",
         instruction=self.root_instruction,
         before_model_callback=self.before_model_callback,
+        after_model_callback=self.after_model_callback,
+        after_tool_callback=self.after_tool_callback,
         description=(
             "This agent orchestrates the decomposition of the user request into"
             " tasks that can be performed by the child agents."
@@ -126,6 +135,17 @@ Current agent: {current_agent['active_agent']}
         state['session_id'] = str(uuid.uuid4())
       state['session_active'] = True
 
+  # debug
+  def after_model_callback(self, callback_context: CallbackContext, llm_response):
+    logger.warning(f"after_model_callback context: {callback_context}")
+    logger.warning(f"after_model_callback response: {llm_response}")
+
+  # debug
+  def after_tool_callback(self, tool: BaseTool, args: dict[str, Any], tool_context: ToolContext, tool_response: dict):
+    logger.warning(f"after_tool_callback args: {args}")
+    logger.warning(f"after_tool_callback tool_context: {tool_context}")
+    logger.warning(f"after_tool_callback tool_response: {tool_response}")
+
   def list_remote_agents(self):
     """List the available remote agents you can use to delegate the task."""
     if not self.remote_agent_connections:
@@ -155,6 +175,7 @@ Current agent: {current_agent['active_agent']}
     Yields:
       A dictionary of JSON data.
     """
+
     if agent_name not in self.remote_agent_connections:
       raise ValueError(f"Agent {agent_name} not found")
     state = tool_context.state
@@ -191,6 +212,7 @@ Current agent: {current_agent['active_agent']}
         metadata={'conversation_id': sessionId},
     )
     task = await client.send_task(request, self.task_callback)
+
     # Assume completion unless a state returns that isn't complete
     state['session_active'] = task.status.state not in [
         TaskState.COMPLETED,
@@ -215,6 +237,10 @@ Current agent: {current_agent['active_agent']}
     if task.artifacts:
       for artifact in task.artifacts:
         response.extend(convert_parts(artifact.parts, tool_context))
+
+    # debug
+    logger.info(f"task response: {response}")
+
     return response
 
 def convert_parts(parts: list[Part], tool_context: ToolContext):
@@ -230,9 +256,9 @@ def convert_part(part: Part, tool_context: ToolContext):
     return part.data
   elif part.type == "file":
     # Repackage A2A FilePart to google.genai Blob
-    # Currently not considering plain text as files    
+    # Currently not considering plain text as files
     file_id = part.file.name
-    file_bytes = base64.b64decode(part.file.bytes)    
+    file_bytes = base64.b64decode(part.file.bytes)
     file_part = types.Part(
       inline_data=types.Blob(
         mime_type=part.file.mimeType,
@@ -242,4 +268,3 @@ def convert_part(part: Part, tool_context: ToolContext):
     tool_context.actions.escalate = True
     return DataPart(data = {"artifact-file-id": file_id})
   return f"Unknown type: {p.type}"
-
