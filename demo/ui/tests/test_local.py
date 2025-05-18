@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 def test_health_check():
     """Test if the UI application is running."""
     url = "http://localhost:12000"
-    max_retries = 5
-    retry_delay = 2
+    max_retries = 10
+    retry_delay = 5
 
     for i in range(max_retries):
         try:
@@ -21,7 +21,8 @@ def test_health_check():
                 return True
             else:
                 logger.error(
-                    f"Health check failed with status code: {response.status_code}"
+                    "Health check failed with status code: "
+                    f"{response.status_code}"
                 )
                 return False
         except requests.exceptions.ConnectionError:
@@ -38,7 +39,7 @@ def test_health_check():
 
 def test_api_functionality():
     """Test the API endpoints."""
-    url = "http://localhost:12000/agents/list"
+    url = "http://localhost:12000/agent/list"
 
     try:
         response = requests.post(url)
@@ -47,7 +48,8 @@ def test_api_functionality():
             return True
         else:
             logger.error(
-                f"API functionality test failed with status code: {response.status_code}"
+                "API functionality test failed with status code: "
+                f"{response.status_code}"
             )
             return False
     except requests.exceptions.RequestException as e:

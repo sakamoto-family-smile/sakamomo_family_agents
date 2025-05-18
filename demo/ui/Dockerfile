@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.13-rc-slim
 
 WORKDIR /app
 
@@ -9,8 +9,11 @@ RUN pip install uv
 COPY a2a_sdk /app/a2a_sdk
 RUN cd /app/a2a_sdk && uv pip install --system --no-cache -e .
 
-# Copy only the necessary files for dependency installation
-COPY demo/ui/pyproject.toml ./
+# Copy necessary files for dependency installation
+COPY demo/ui/pyproject.toml demo/ui/README.md ./
+
+# Modify pyproject.toml to use the correct path
+RUN sed -i 's|../../a2a_sdk|/app/a2a_sdk|g' pyproject.toml
 
 # Install dependencies using uv
 RUN uv pip install --system --no-cache .
