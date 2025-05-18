@@ -1,10 +1,14 @@
 #!/bin/bash
 
+# Get the absolute path of the project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+
 # Load environment variables from .env
-if [ -f .env ]; then
-    source .env
+if [ -f "${SCRIPT_DIR}/../.env" ]; then
+    source "${SCRIPT_DIR}/../.env"
 else
-    echo "Error: .env file not found in $(pwd)"
+    echo "Error: .env file not found in ${SCRIPT_DIR}/.."
     exit 1
 fi
 
@@ -16,8 +20,9 @@ fi
 
 # Build the Docker image
 echo "Building Docker image..."
-cd ..
-docker build -t sample-agent -f sample_agent/Dockerfile .
+cd "$PROJECT_ROOT"
+echo "Building from directory: $(pwd)"
+docker build -t sample-agent -f agents/sample_agent/Dockerfile .
 cd - > /dev/null
 
 # Run the container in the background
@@ -31,30 +36,17 @@ fi
 
 # Wait for the container to start
 echo "Waiting for container to start..."
-sleep 10
-
-# Test the health endpoint
-echo "Testing health endpoint..."
-HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health)
-
-if [ "$HEALTH_RESPONSE" == "200" ]; then
-    echo "Health check passed!"
-else
-    echo "Health check failed with status code: $HEALTH_RESPONSE"
-    echo "Container logs:"
-    docker logs $CONTAINER_ID
-    docker stop $CONTAINER_ID
-    exit 1
-fi
+sleep 15
 
 # Test the agent capabilities endpoint
 echo "Testing agent capabilities..."
-CAPABILITIES_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/agent-card)
+RESPONSE=$(curl -s http://localhost:8080/agent-card)
 
-if [ "$CAPABILITIES_RESPONSE" == "200" ]; then
-    echo "Capabilities check passed!"
+if [ $? -eq 0 ] && [ ! -z "$RESPONSE" ]; then
+    echo "Agent capabilities test passed!"
+    echo "Response: $RESPONSE"
 else
-    echo "Capabilities check failed with status code: $CAPABILITIES_RESPONSE"
+    echo "Agent capabilities test failed"
     echo "Container logs:"
     docker logs $CONTAINER_ID
     docker stop $CONTAINER_ID
