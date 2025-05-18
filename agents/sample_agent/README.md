@@ -29,6 +29,11 @@ To run the agent locally:
 python -m sample_agent
 ```
 
+By default, the agent will listen on `0.0.0.0:8080`. You can customize the host and port using environment variables:
+```bash
+HOST=localhost PORT=10002 python -m sample_agent
+```
+
 ## Docker Development
 
 ### Build and Run Locally
@@ -37,6 +42,7 @@ python -m sample_agent
 make build
 
 # Run the container locally
+# This will map port 10002 on your host to port 8080 in the container
 make run
 ```
 
@@ -49,8 +55,7 @@ make test-docker
 This will:
 - Build the Docker image
 - Start the container
-- Test the health endpoint
-- Test the agent capabilities endpoint
+- Run the test suite
 - Stop the container
 
 ## Cloud Run Deployment
@@ -68,9 +73,8 @@ make deploy
 
 This will:
 1. Build the Docker image
-2. Configure GCP settings
-3. Push the image to Google Container Registry
-4. Deploy to Cloud Run
+2. Push the image to Google Artifact Registry
+3. Deploy to Cloud Run
 
 ### Manual Deployment Steps
 If you prefer to deploy manually, you can use the following commands:
@@ -90,16 +94,64 @@ make gcp-build-push
 make gcp-run-deploy
 ```
 
+### Verify Deployment
+After deployment, you can verify the service is working correctly:
+
+```bash
+# Check agent information
+make verify-agent-info
+
+# Test the API
+make verify-api
+
+# Run all verification checks
+make verify-all
+```
+
 ## Environment Variables
 
 - `GOOGLE_API_KEY`: Required for Google ADK functionality
 - `GCP_PROJECT_ID`: Your Google Cloud Project ID
+- `HOST`: Host to bind to (default: "0.0.0.0")
+- `PORT`: Port to listen on (default: "8080")
 
 ## API Endpoints
 
-- `/health`: Health check endpoint
-- `/agent-card`: Returns agent capabilities and information
-- `/`: Main endpoint for agent interaction
+- `/.well-known/agent.json`: Returns agent capabilities and information (GET)
+- `/`: Main endpoint for agent interaction (POST)
+  - Accepts JSON-RPC 2.0 requests
+  - Supported methods:
+    - `tasks/send`: Send a task to the agent
+    - `tasks/get`: Get task status
+    - `tasks/cancel`: Cancel a task
+    - `tasks/sendSubscribe`: Send a task with streaming response
+
+### Example API Request
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tasks/send",
+    "id": "test-1",
+    "params": {
+      "id": "test-1",
+      "sessionId": "test-session",
+      "message": {
+        "role": "user",
+        "parts": [
+          {
+            "type": "text",
+            "text": "Can you reimburse me $20 for my lunch with the clients?"
+          }
+        ]
+      },
+      "acceptedOutputModes": ["text"]
+    }
+  }' \
+  http://localhost:10002
+```
 
 ## Troubleshooting
 
@@ -116,3 +168,8 @@ gcloud run services logs tail sample-agent
 
 2. Verify environment variables are set correctly
 3. Ensure all prerequisites are installed and configured properly
+4. Check the service URL and endpoints:
+```bash
+# Get the Cloud Run service URL
+gcloud run services describe sample-agent --region asia-northeast1 --format='value(status.url)'
+```

@@ -27,7 +27,7 @@ COPY agents/sample_agent /app/sample_agent/
 # Set environment variables
 ENV HOST=0.0.0.0
 ENV PORT=8080
-ENV PYTHONPATH=/app/sample_agent
+ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # Add healthcheck

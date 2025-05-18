@@ -1,5 +1,7 @@
 from common.server import A2AServer
-from common.types import AgentCard, AgentCapabilities, AgentSkill, MissingAPIKeyError
+from common.types import (
+    AgentCard, AgentCapabilities, AgentSkill, MissingAPIKeyError
+)
 from task_manager import AgentTaskManager
 from agent import ReimbursementAgent
 import click
@@ -14,24 +16,34 @@ logger = logging.getLogger(__name__)
 
 
 @click.command()
-@click.option("--host", default="localhost")
-@click.option("--port", default=10002)
+@click.option("--host", default=lambda: os.getenv("HOST", "0.0.0.0"))
+@click.option("--port", default=lambda: int(os.getenv("PORT", "8080")))
 def main(host, port):
     try:
         if not os.getenv("GOOGLE_API_KEY"):
-                raise MissingAPIKeyError("GOOGLE_API_KEY environment variable not set.")
-        
+            raise MissingAPIKeyError(
+                "GOOGLE_API_KEY environment variable not set."
+            )
+
         capabilities = AgentCapabilities(streaming=True)
         skill = AgentSkill(
             id="process_reimbursement",
             name="Process Reimbursement Tool",
-            description="Helps with the reimbursement process for users given the amount and purpose of the reimbursement.",
+            description=(
+                "Helps with the reimbursement process for users given the "
+                "amount and purpose of the reimbursement."
+            ),
             tags=["reimbursement"],
-            examples=["Can you reimburse me $20 for my lunch with the clients?"],
+            examples=[
+                "Can you reimburse me $20 for my lunch with the clients?"
+            ],
         )
         agent_card = AgentCard(
             name="Reimbursement Agent",
-            description="This agent handles the reimbursement process for the employees given the amount and purpose of the reimbursement.",
+            description=(
+                "This agent handles the reimbursement process for the employees "
+                "given the amount and purpose of the reimbursement."
+            ),
             url=f"http://{host}:{port}/",
             version="1.0.0",
             defaultInputModes=ReimbursementAgent.SUPPORTED_CONTENT_TYPES,
@@ -52,7 +64,7 @@ def main(host, port):
     except Exception as e:
         logger.error(f"An error occurred during server startup: {e}")
         exit(1)
-    
+
+
 if __name__ == "__main__":
     main()
-

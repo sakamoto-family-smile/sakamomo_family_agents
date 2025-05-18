@@ -12,6 +12,9 @@ VERSION := v1
 AR_REGISTRY_NAME := sakamomo-family-service
 REGISTRY := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/$(AR_REGISTRY_NAME)/agents
 
+# Get the Cloud Run service URL
+SERVICE_URL := $(shell gcloud run services describe $(SERVICE_NAME) --region $(REGION) --format='value(status.url)')
+
 # Docker commands
 .PHONY: build
 build:
@@ -19,7 +22,7 @@ build:
 
 .PHONY: run
 run:
-	docker run -p 8080:8080 -e GOOGLE_API_KEY=${GOOGLE_API_KEY} $(IMAGE_NAME):$(VERSION)
+	docker run -p 10002:8080 -e GOOGLE_API_KEY=${GOOGLE_API_KEY} $(IMAGE_NAME):$(VERSION)
 
 # GCP commands
 .PHONY: gcp-configure
@@ -47,16 +50,31 @@ gcp-run-deploy:
 		--min-instances 0 \
 		--max-instances 10 \
 		--port 8080 \
-		--timeout 300 \
-		--startup-probe-initial-delay 5 \
-		--startup-probe-period 5 \
-		--startup-probe-timeout 4 \
-		--startup-probe-failure-threshold 3
+		--timeout 300
 
 # Test commands
 .PHONY: test-docker
 test-docker:
 	./test/test_docker.sh
+
+# Verification commands
+.PHONY: verify-agent-info
+verify-agent-info:
+	@echo "Checking agent info at $(SERVICE_URL)/.well-known/agent.json"
+	@curl -f $(SERVICE_URL)/.well-known/agent.json || (echo "\nAgent info check failed!" && exit 1)
+	@echo "\nAgent info check passed!"
+
+.PHONY: verify-api
+verify-api:
+	@echo "Testing reimbursement API at $(SERVICE_URL)"
+	@curl -X POST \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc": "2.0", "method": "tasks/send", "id": "test-1", "params": {"id": "test-1", "sessionId": "test-session", "message": {"role": "user", "parts": [{"type": "text", "text": "Can you reimburse me $20 for my lunch with the clients?"}]}, "acceptedOutputModes": ["text"]}}' \
+		$(SERVICE_URL)
+	@echo "\nAPI test completed!"
+
+.PHONY: verify-all
+verify-all: verify-agent-info verify-api
 
 # Combined deployment command
 .PHONY: deploy
