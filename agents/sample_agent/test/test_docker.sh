@@ -18,25 +18,55 @@ if [ -z "$GOOGLE_API_KEY" ]; then
     exit 1
 fi
 
+# Set version
+VERSION="v1"
+IMAGE_NAME="sample-agent:${VERSION}"
+
 # Build the Docker image
-echo "Building Docker image..."
+echo "Building Docker image ${IMAGE_NAME}..."
 cd "$PROJECT_ROOT"
 echo "Building from directory: $(pwd)"
-docker build -t sample-agent -f agents/sample_agent/Dockerfile .
+docker build -t ${IMAGE_NAME} -f agents/sample_agent/Dockerfile .
 cd - > /dev/null
 
 # Run the container in the background
 echo "Starting container..."
-CONTAINER_ID=$(docker run -d -p 8080:8080 -e GOOGLE_API_KEY=${GOOGLE_API_KEY} sample-agent)
+CONTAINER_ID=$(docker run -d -p 8080:8080 -e GOOGLE_API_KEY=${GOOGLE_API_KEY} ${IMAGE_NAME})
 
 if [ -z "$CONTAINER_ID" ]; then
     echo "Error: Failed to start container"
     exit 1
 fi
 
-# Wait for the container to start
-echo "Waiting for container to start..."
-sleep 15
+# Function to check health endpoint
+check_health() {
+    local max_attempts=30
+    local attempt=1
+    local wait_time=2
+
+    echo "Checking health endpoint..."
+    while [ $attempt -le $max_attempts ]; do
+        if curl -s -f http://localhost:8080/health > /dev/null; then
+            echo "Health check passed on attempt $attempt"
+            return 0
+        fi
+        echo "Attempt $attempt/$max_attempts: Health check failed, waiting ${wait_time}s..."
+        sleep $wait_time
+        attempt=$((attempt + 1))
+    done
+
+    echo "Health check failed after $max_attempts attempts"
+    return 1
+}
+
+# Wait for the container to be healthy
+if ! check_health; then
+    echo "Container failed to become healthy"
+    echo "Container logs:"
+    docker logs $CONTAINER_ID
+    docker stop $CONTAINER_ID
+    exit 1
+fi
 
 # Test the agent capabilities endpoint
 echo "Testing agent capabilities..."
