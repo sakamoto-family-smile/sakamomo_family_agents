@@ -45,50 +45,68 @@
 
 ## 必要要件
 
-- Python 3.9以上
-- [UV](https://docs.astral.sh/uv/)
+- Python 3.12以上
+- Docker
 - Google Cloud Platform アカウント
+  - Artifact Registry API の有効化
+  - Cloud Run API の有効化
   - Vertex AI API の有効化
   - BigQuery API の有効化
 - EDINET API キー
 - 必要な環境変数:
   - `GCP_PROJECT`: GCPプロジェクトID
-  - `GCP_LOCATION`: GCPロケーション（例: us-central1）
+  - `GCP_LOCATION`: GCPロケーション（例: asia-northeast1）
   - `EDINET_API_KEY`: EDINET APIキー
   - `GCS_LOG_BUCKET_NAME`: ログを保存するGCSのバケット名
   - `GOOGLE_API_KEY`: geminiのAPIキー
   - `LLM_MODEL_NAME`: geminiのモデル名
 
-## セットアップ
+## セットアップと実行
 
-1. 環境変数の設定:
-   .envファイルをルートに作成
+すべての操作は`make`コマンドを通じて行います。
 
-2. 依存パッケージのインストール:
+### ローカル環境での実行
+
+1. Dockerイメージのビルド:
    ```bash
-   uv pip install -r requirements.txt
+   make build
    ```
 
-## 使用方法
-
-1. エージェントの起動:
+2. ローカルでのコンテナ実行:
    ```bash
-   uv run main.py
+   make run
    ```
 
-2. A2Aクライアントの実行:
+3. ローカルコンテナのテスト:
    ```bash
-   cd a2a_sdk
-   uv run hosts/cli --agent http://localhost:10020
+   make test-local
    ```
 
-3. 企業分析の実行:
+4. ローカルコンテナの停止と削除:
+   ```bash
+   make clean
    ```
-   # 企業名を指定して分析を開始
-   analyze 企業名
 
-   # 分析結果の確認
-   # エージェントが自動的に有価証券報告書を取得し、分析を実行します
+### Cloud Runへのデプロイ
+
+1. Artifact Registryへのプッシュ:
+   ```bash
+   make push
+   ```
+
+2. Cloud Runへのデプロイ:
+   ```bash
+   make deploy
+   ```
+
+3. Cloud Runのテスト:
+   ```bash
+   BASE_URL=<cloud-run-url> make test-cloud-run
+   ```
+
+4. Cloud Runサービスの削除:
+   ```bash
+   make clean-cloud-run
    ```
 
 ## エラーハンドリング
