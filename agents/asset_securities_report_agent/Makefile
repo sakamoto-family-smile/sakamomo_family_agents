@@ -15,7 +15,7 @@ SERVICE_NAME := asset-securities-report-agent
 # Full image path
 FULL_IMAGE_NAME := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/$(AR_REGISTRY_NAME)/agents/$(IMAGE_NAME):$(TAG)
 
-.PHONY: build push deploy run test test-local test-cloud-run
+.PHONY: build push deploy run test test-local test-cloud-run clean clean-cloud-run
 
 # Build Docker image
 build:
@@ -57,3 +57,10 @@ test-cloud-run:
 clean:
 	docker stop $(IMAGE_NAME) || true
 	docker rm $(IMAGE_NAME) || true
+
+# Delete Cloud Run service
+clean-cloud-run:
+	gcloud run services delete $(SERVICE_NAME) \
+		--platform managed \
+		--region $(REGION) \
+		--quiet

@@ -2,7 +2,6 @@ import requests
 import sys
 import logging
 import os
-from google.cloud import run_v2
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -10,21 +9,11 @@ logger = logging.getLogger(__name__)
 
 def get_cloud_run_url():
     """Get the URL of the Cloud Run service."""
-    client = run_v2.ServicesClient()
-    project_id = os.getenv("GCP_PROJECT")
-    region = "asia-northeast1"
-    service_name = "asset-securities-report-agent"
-
-    request = run_v2.GetServiceRequest(
-        name=f"projects/{project_id}/locations/{region}/services/{service_name}"
-    )
-
-    try:
-        response = client.get_service(request=request)
-        return response.uri
-    except Exception as e:
-        logger.error(f"Failed to get Cloud Run URL: {e}")
+    base_url = os.getenv("BASE_URL")
+    if not base_url:
+        logger.error("BASE_URL environment variable not set")
         return None
+    return base_url
 
 
 def test_health_check(base_url):
