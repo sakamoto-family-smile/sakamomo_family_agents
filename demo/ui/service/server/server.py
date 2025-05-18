@@ -34,11 +34,11 @@ class ConversationServer:
   def __init__(self, router: APIRouter):
     agent_manager = os.environ.get("A2A_HOST", "ADK")
     self.manager: ApplicationManager
-    
+
     # Get API key from environment
     api_key = os.environ.get("GOOGLE_API_KEY", "")
     uses_vertex_ai = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").upper() == "TRUE"
-    
+
     if agent_manager.upper() == "ADK":
       self.manager = ADKHostManager(api_key=api_key, uses_vertex_ai=uses_vertex_ai)
     else:
@@ -181,13 +181,13 @@ class ConversationServer:
           content=base64.b64decode(part.file.bytes),
           media_type=part.file.mimeType)
     return Response(content=part.file.bytes, media_type=part.file.mimeType)
-  
+
   async def _update_api_key(self, request: Request):
     """Update the API key"""
     try:
         data = await request.json()
         api_key = data.get("api_key", "")
-        
+
         if api_key:
             # Update in the manager
             self.update_api_key(api_key)
