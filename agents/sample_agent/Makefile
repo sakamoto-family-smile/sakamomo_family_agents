@@ -1,5 +1,10 @@
+# Load environment variables from .env
+ifneq (,$(wildcard .env))
+include .env
+endif
+
 # Configuration
-PROJECT_ID := your-project-id
+PROJECT_ID ?= $(GCP_PROJECT_ID)
 REGION := asia-northeast1
 SERVICE_NAME := sample-agent
 IMAGE_NAME := sample-agent
@@ -7,7 +12,7 @@ IMAGE_NAME := sample-agent
 # Docker commands
 .PHONY: build
 build:
-	docker build -t $(IMAGE_NAME) .
+	cd ../.. && docker build -t $(IMAGE_NAME) -f agents/sample_agent/Dockerfile agents/sample_agent
 
 .PHONY: run
 run:
@@ -32,6 +37,11 @@ gcp-run-deploy:
 		--region $(REGION) \
 		--allow-unauthenticated \
 		--set-env-vars GOOGLE_API_KEY=${GOOGLE_API_KEY}
+
+# Test commands
+.PHONY: test-docker
+test-docker:
+	./test/test_docker.sh
 
 # Combined deployment command
 .PHONY: deploy

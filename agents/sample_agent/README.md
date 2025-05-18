@@ -1,38 +1,118 @@
-## ADK Agent
+# Sample Agent
 
-This sample uses the Agent Development Kit (ADK) to create a simple "Expense Reimbursement" agent that is hosted as an A2A server.
-
-This agent takes text requests from the client and, if any details are missing, returns a webform for the client (or its user) to fill out. After the client fills out the form, the agent will complete the task.
+This is a sample Google ADK-based Expense Reimbursement agent hosted as an A2A server.
 
 ## Prerequisites
 
-- Python 3.9 or higher
-- [UV](https://docs.astral.sh/uv/)
-- Access to an LLM and API Key
+- Python 3.12 or higher
+- Docker
+- Google Cloud SDK
+- Make
 
+## Environment Setup
 
-## Running the Sample
+1. Create a `.env` file in the project root with the following variables:
+```
+GOOGLE_API_KEY=your_google_api_key
+GCP_PROJECT_ID=your_gcp_project_id
+```
 
-1. Navigate to the samples directory:
-    ```bash
-    cd samples/python/agents/google_adk
-    ```
-2. Create an environment file with your API key:
+2. Install dependencies:
+```bash
+pip install -e .
+```
 
-   ```bash
-   echo "GOOGLE_API_KEY=your_api_key_here" > .env
-   ```
+## Local Development
 
-4. Run an agent:
-    ```bash
-    uv run .
-    ```
+To run the agent locally:
+```bash
+python -m sample_agent
+```
 
-5. In a separate terminal, run the A2A client:
-    ```
-    # Connect to the agent (specify the agent URL with correct port)
-    uv run hosts/cli --agent http://localhost:10002
+## Docker Development
 
-    # If you changed the port when starting the agent, use that port instead
-    # uv run hosts/cli --agent http://localhost:YOUR_PORT
-    ```
+### Build and Run Locally
+```bash
+# Build the Docker image
+make build
+
+# Run the container locally
+make run
+```
+
+### Test Docker Environment
+To verify the Docker environment is working correctly:
+```bash
+make test-docker
+```
+
+This will:
+- Build the Docker image
+- Start the container
+- Test the health endpoint
+- Test the agent capabilities endpoint
+- Stop the container
+
+## Cloud Run Deployment
+
+### Prerequisites
+1. Ensure you have the Google Cloud SDK installed and configured
+2. Make sure you have the necessary permissions to deploy to Cloud Run
+3. Set up your `.env` file with the required environment variables
+
+### Deployment Steps
+```bash
+# Deploy to Cloud Run
+make deploy
+```
+
+This will:
+1. Build the Docker image
+2. Configure GCP settings
+3. Push the image to Google Container Registry
+4. Deploy to Cloud Run
+
+### Manual Deployment Steps
+If you prefer to deploy manually, you can use the following commands:
+
+1. Configure GCP:
+```bash
+make gcp-configure
+```
+
+2. Build and push the image:
+```bash
+make gcp-build-push
+```
+
+3. Deploy to Cloud Run:
+```bash
+make gcp-run-deploy
+```
+
+## Environment Variables
+
+- `GOOGLE_API_KEY`: Required for Google ADK functionality
+- `GCP_PROJECT_ID`: Your Google Cloud Project ID
+
+## API Endpoints
+
+- `/health`: Health check endpoint
+- `/agent-card`: Returns agent capabilities and information
+- `/`: Main endpoint for agent interaction
+
+## Troubleshooting
+
+If you encounter any issues:
+
+1. Check the logs:
+```bash
+# For local Docker container
+docker logs <container_id>
+
+# For Cloud Run
+gcloud run services logs tail sample-agent
+```
+
+2. Verify environment variables are set correctly
+3. Ensure all prerequisites are installed and configured properly
