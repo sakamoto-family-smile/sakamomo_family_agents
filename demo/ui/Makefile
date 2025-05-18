@@ -5,7 +5,7 @@ ifneq (,$(wildcard .env))
 endif
 
 # Variables
-PROJECT_ID := $(GCP_PROJECT)
+PROJECT_ID := $(GOOGLE_CLOUD_PROJECT)
 REGION := asia-northeast1
 AR_REGISTRY_NAME := sakamomo-family-service
 IMAGE_NAME := a2a-ui
@@ -32,6 +32,8 @@ deploy: push
 		--image $(FULL_IMAGE_NAME) \
 		--platform managed \
 		--region $(REGION) \
+		--cpu 4 \
+		--memory 4Gi \
 		--port 12000 \
 		--allow-unauthenticated \
 		--set-env-vars="GOOGLE_API_KEY=${GOOGLE_API_KEY},GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI}"

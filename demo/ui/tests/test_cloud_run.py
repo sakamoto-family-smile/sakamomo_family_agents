@@ -27,7 +27,8 @@ def test_health_check(base_url):
             return True
         else:
             logger.error(
-                f"Health check failed with status code: {response.status_code}"
+                "Health check failed with status code: "
+                f"{response.status_code}"
             )
             return False
     except requests.exceptions.RequestException as e:
@@ -37,7 +38,7 @@ def test_health_check(base_url):
 
 def test_api_functionality(base_url):
     """Test the API endpoints."""
-    url = f"{base_url}/agents/list"
+    url = f"{base_url}/agent/list"
 
     try:
         response = requests.post(url)
@@ -46,7 +47,8 @@ def test_api_functionality(base_url):
             return True
         else:
             logger.error(
-                f"API functionality test failed with status code: {response.status_code}"
+                "API functionality test failed with status code: "
+                f"{response.status_code}"
             )
             return False
     except requests.exceptions.RequestException as e:

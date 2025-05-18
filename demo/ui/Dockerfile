@@ -23,13 +23,16 @@ COPY demo/ui .
 
 # Set environment variables
 ENV HOST=0.0.0.0
-ENV PORT=12000
+ENV DEBUG_MODE=false
 ENV PYTHONPATH=/app:/app/a2a_sdk
 ENV PYTHONUNBUFFERED=1
 
+# The container must listen on the port specified by PORT at runtime
+# Default to 12000 for local development
+ENV PORT=12000
+
 # Expose the port
-EXPOSE 12000
+EXPOSE ${PORT}
 
 # Run the application
 ENTRYPOINT ["python", "-u", "main.py"]
-CMD ["--host", "0.0.0.0", "--port", "12000"]
