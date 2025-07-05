@@ -1,0 +1,33 @@
+[project]
+name = "bigquery-server"
+version = "0.1.0"
+description = "MCP server for BigQuery operations"
+requires-python = ">=3.9"
+dependencies = [
+    "mcp>=1.10.0",
+    "google-cloud-bigquery>=3.11.0",
+    "google-auth>=2.22.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bigquery_server"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["src"]
+python_files = ["test_*.py"]
