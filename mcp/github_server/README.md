@@ -15,32 +15,21 @@ GitHub MCPサーバーは、GitHubのリポジトリ、イシュー、プルリ�
 
 ## セットアップ
 
-### 1. 前提条件の確認
+### 1. .envファイルの作成
+
+まず、`.env`ファイルを作成し、必要な値を設定します。
 
 ```bash
-make check-prerequisites
+make setup-env
+cp .env.template .env
+# エディタで .env を編集
 ```
 
-### 2. Google Cloud認証
+- `GITHUB_TOKEN` にはGitHubのPersonal Access Tokenを設定してください。
+- 必要に応じて `GITHUB_APP_ID` や `GITHUB_APP_PRIVATE_KEY` も設定できます。
+- GCPの設定値（`PROJECT_ID` など）は省略可能で、gcloudのデフォルト値が使われます。
 
-```bash
-make auth
-```
-
-### 3. 設定ファイルの作成
-
-```bash
-make setup-config
-```
-
-作成された `config/config.template.env` を `config/config.env` にコピーし、必要な値を設定してください：
-
-```bash
-cp config/config.template.env config/config.env
-# エディタで config/config.env を編集
-```
-
-### 4. GitHubトークンの準備
+### 2. GitHubトークンの準備
 
 GitHub Personal Access Tokenを取得してください：
 1. GitHub.com にログイン
@@ -49,25 +38,34 @@ GitHub Personal Access Tokenを取得してください：
 4. 必要な権限を選択（repo, workflow等）
 5. トークンを生成し、安全に保存
 
+### 3. 前提条件の確認
+
+```bash
+make check-prerequisites
+```
+
+### 4. Google Cloud認証
+
+```bash
+make auth
+```
+
 ## デプロイメント
 
 ### 基本的なデプロイメント
 
-環境変数を直接指定してデプロイ：
+`.env`ファイルに必要な値を記載した上で、以下のコマンドでデプロイします：
 
 ```bash
-make deploy GITHUB_TOKEN=your_token_here
+make deploy
 ```
 
 ### Secret Managerを使用したデプロイメント（推奨）
 
-1. シークレットを作成：
+1. `.env`ファイルにシークレット情報を記載した上で、シークレットを作成：
 
 ```bash
-make create-secrets \
-  GITHUB_TOKEN=your_token_here \
-  GITHUB_APP_ID=your_app_id_here \
-  GITHUB_APP_PRIVATE_KEY=your_private_key_here
+make create-secrets
 ```
 
 2. シークレットを使用してデプロイ：
@@ -99,26 +97,42 @@ make logs
 ### ローカルテスト
 
 ```bash
-make test-local GITHUB_TOKEN=your_token_here
+make test-local
 ```
 
 ## 設定オプション
 
-### 環境変数
+### .envファイルの例
+
+`.env.template` を参考にしてください。
+
+```
+# GitHub MCP Server Environment Configuration
+# Copy this file to .env and fill in your values
+
+# GitHub Personal Access Token (required)
+GITHUB_TOKEN=your_github_token_here
+
+# GitHub App Configuration (optional)
+GITHUB_APP_ID=your_github_app_id_here
+GITHUB_APP_PRIVATE_KEY=your_github_app_private_key_here
+
+# GCP Configuration (optional)
+PROJECT_ID=your_gcp_project_id_here
+REGION=asia-northeast1
+SERVICE_NAME=github-mcp-server
+```
+
+### 必須・任意の変数
 
 | 変数名 | 説明 | 必須 |
 |--------|------|------|
 | `GITHUB_TOKEN` | GitHub Personal Access Token | はい |
 | `GITHUB_APP_ID` | GitHub App ID（オプション） | いいえ |
 | `GITHUB_APP_PRIVATE_KEY` | GitHub App Private Key（オプション） | いいえ |
-
-### GCP設定
-
-| 変数名 | デフォルト値 | 説明 |
-|--------|-------------|------|
-| `PROJECT_ID` | gcloud configから取得 | GCPプロジェクトID |
-| `REGION` | asia-northeast1 | Cloud Runのリージョン |
-| `SERVICE_NAME` | github-mcp-server | Cloud Runサービス名 |
+| `PROJECT_ID` | GCPプロジェクトID（省略可） | いいえ |
+| `REGION` | Cloud Runのリージョン（省略可） | いいえ |
+| `SERVICE_NAME` | Cloud Runサービス名（省略可） | いいえ |
 
 ## 利用可能なコマンド
 
@@ -128,34 +142,41 @@ make help
 
 ### 主要なコマンド
 
-- `make deploy` - 基本的なデプロイメント
-- `make deploy-with-secret` - Secret Managerを使用したデプロイメント
+- `make setup-env` - .envテンプレートの作成
+- `make check-prerequisites` - 前提条件の確認
+- `make auth` - GCP認証
+- `make deploy` - デプロイ
+- `make deploy-with-secret` - Secret Managerを使用したデプロイ
 - `make create-secrets` - Secret Managerにシークレットを作成
 - `make status` - サービス状態の確認
 - `make logs` - ログの表示
 - `make delete` - サービスの削除
 - `make clean` - Dockerイメージのクリーンアップ
+- `make test-local` - ローカルテスト
 
 ## トラブルシューティング
 
 ### よくある問題
 
-1. **認証エラー**
+1. **.envファイルがない/値が未設定**
+   ```bash
+   make setup-env
+   cp .env.template .env
+   # .envを編集
+   ```
+2. **認証エラー**
    ```bash
    make auth
    ```
-
-2. **APIが有効になっていない**
+3. **APIが有効になっていない**
    ```bash
    make enable-apis
    ```
-
-3. **Dockerイメージの取得に失敗**
+4. **Dockerイメージの取得に失敗**
    ```bash
    make pull-image
    ```
-
-4. **権限エラー**
+5. **権限エラー**
    - GCPプロジェクトに適切な権限があることを確認
    - GitHubトークンに必要な権限があることを確認
 
