@@ -7,8 +7,12 @@
 PROJECT_ID ?= $(shell gcloud config get-value project)
 REGION ?= asia-northeast1
 SERVICE_NAME ?= github-mcp-server
-IMAGE_NAME ?= gcr.io/$(PROJECT_ID)/$(SERVICE_NAME)
+REPOSITRY_NAME ?= sakamomo-family-mcp
+ARTIFACT_REGISTRY_HOST_NAME ?= ${REGION}-docker.pkg.dev
+GCP_IMAGE_NAME ?= ${ARTIFACT_REGISTRY_HOST_NAME}/$(PROJECT_ID)/${REPOSITRY_NAME}/$(SERVICE_NAME)
 DOCKER_IMAGE ?= ghcr.io/github/github-mcp-server:latest
+SERVICE_ACCOUNT_NAME ?= github-mcp-server-sa
+SERVICE_ACCOUNT_EMAIL ?= $(SERVICE_ACCOUNT_NAME)@$(PROJECT_ID).iam.gserviceaccount.com
 
 # Load environment variables from .env file if it exists
 ifneq (,$(wildcard .env))
@@ -37,7 +41,7 @@ auth: ## Authenticate with Google Cloud
 	@echo "Authenticating with Google Cloud..."
 	gcloud auth login
 	gcloud config set project $(PROJECT_ID)
-	gcloud auth configure-docker
+	gcloud auth configure-docker ${ARTIFACT_REGISTRY_HOST_NAME}
 
 .PHONY: enable-apis
 enable-apis: ## Enable required Google Cloud APIs
@@ -54,45 +58,61 @@ pull-image: ## Pull the GitHub MCP Server Docker image
 .PHONY: tag-image
 tag-image: ## Tag the Docker image for GCP Container Registry
 	@echo "Tagging Docker image for GCP..."
-	docker tag $(DOCKER_IMAGE) $(IMAGE_NAME)
+	docker tag $(DOCKER_IMAGE) $(GCP_IMAGE_NAME)
 
 .PHONY: push-image
 push-image: ## Push the Docker image to GCP Container Registry
 	@echo "Pushing Docker image to GCP Container Registry..."
-	docker push $(IMAGE_NAME)
+	docker push $(GCP_IMAGE_NAME)
+
+.PHONY: create-service-account
+create-service-account: ## Create and setup service account for Cloud Run
+	@echo "Creating service account for Cloud Run..."
+	gcloud iam service-accounts create $(SERVICE_ACCOUNT_NAME) \
+		--display-name="GitHub MCP Server Service Account" \
+		--description="Service account for GitHub MCP Server running on Cloud Run"
+	@echo "Granting necessary roles to service account..."
+	gcloud projects add-iam-policy-binding $(PROJECT_ID) \
+		--member="serviceAccount:$(SERVICE_ACCOUNT_EMAIL)" \
+		--role="roles/secretmanager.secretAccessor"
+	gcloud projects add-iam-policy-binding $(PROJECT_ID) \
+		--member="serviceAccount:$(SERVICE_ACCOUNT_EMAIL)" \
+		--role="roles/run.invoker"
 
 .PHONY: deploy
-deploy: check-prerequisites check-env auth enable-apis pull-image tag-image push-image ## Deploy the GitHub MCP Server to Cloud Run
+deploy: pull-image tag-image push-image ## Deploy the GitHub MCP Server to Cloud Run
 	@echo "Deploying GitHub MCP Server to Cloud Run..."
 	@if [ -z "$(GITHUB_TOKEN)" ]; then echo "Error: GITHUB_TOKEN is not set. Please create a .env file with your GitHub token."; exit 1; fi
 	gcloud run deploy $(SERVICE_NAME) \
-		--image $(IMAGE_NAME) \
+		--image $(GCP_IMAGE_NAME) \
 		--platform managed \
 		--region $(REGION) \
+		--service-account $(SERVICE_ACCOUNT_EMAIL) \
 		--allow-unauthenticated \
 		--port 8080 \
 		--memory 512Mi \
 		--cpu 1 \
 		--max-instances 10 \
-		--set-env-vars "GITHUB_TOKEN=$(GITHUB_TOKEN)" \
+		--set-env-vars "GITHUB_PERSONAL_ACCESS_TOKEN=$(GITHUB_TOKEN)" \
 		--set-env-vars "GITHUB_APP_ID=$(GITHUB_APP_ID)" \
 		--set-env-vars "GITHUB_APP_PRIVATE_KEY=$(GITHUB_APP_PRIVATE_KEY)"
 
 .PHONY: deploy-with-secret
-deploy-with-secret: check-prerequisites check-env auth enable-apis pull-image tag-image push-image ## Deploy with GitHub secrets from Secret Manager
+deploy-with-secret: pull-image tag-image push-image ## Deploy with GitHub secrets from Secret Manager
 	@echo "Deploying with GitHub secrets from Secret Manager..."
 	gcloud run deploy $(SERVICE_NAME) \
-		--image $(IMAGE_NAME) \
+		--image $(GCP_IMAGE_NAME) \
 		--platform managed \
 		--region $(REGION) \
+		--service-account $(SERVICE_ACCOUNT_EMAIL) \
 		--allow-unauthenticated \
 		--port 8080 \
 		--memory 512Mi \
 		--cpu 1 \
 		--max-instances 10 \
-		--set-secrets "GITHUB_TOKEN=github-token:latest" \
-		--set-secrets "GITHUB_APP_ID=github-app-id:latest" \
-		--set-secrets "GITHUB_APP_PRIVATE_KEY=github-app-private-key:latest"
+		--set-env-vars "GITHUB_PERSONAL_ACCESS_TOKEN=$(GITHUB_TOKEN)" \
+		--set-env-vars "GITHUB_APP_ID=$(GITHUB_APP_ID)" \
+		--set-env-vars "GITHUB_APP_PRIVATE_KEY=$(GITHUB_APP_PRIVATE_KEY)"
 
 .PHONY: create-secrets
 create-secrets: check-env ## Create secrets in Secret Manager (requires .env file with GITHUB_TOKEN, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY)
