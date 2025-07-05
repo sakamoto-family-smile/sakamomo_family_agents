@@ -1,0 +1,38 @@
+# Configuration files with sensitive data
+.env
+config/config.env
+config/*.env
+!config/config.template.env
+!.env.template
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# GCP
+*.json
+!package.json
+!tsconfig.json
+!angular.json
+!firebase.json
