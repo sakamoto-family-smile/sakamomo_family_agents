@@ -24,7 +24,8 @@ def create_server() -> FastMCP:
     @mcp.tool()
     async def execute_query(query: str) -> Dict[str, Any]:
         """Executes a SQL query and returns the results."""
-        return await bq_client.execute_query(query)
+        results = await bq_client.execute_query(query)
+        return {"results": results}
 
     return mcp
 

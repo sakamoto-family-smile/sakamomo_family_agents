@@ -1,9 +1,10 @@
 import os
 import pytest
 from unittest.mock import AsyncMock, patch
+from mcp.server.fastmcp.exceptions import ToolError
+from mcp.types import TextContent
 
 from bigquery_server.server import create_server
-from bigquery_server.bigquery_client import BigQueryClient
 
 
 @pytest.fixture
@@ -30,21 +31,29 @@ async def test_list_datasets(server, mock_bq_client):
     # Prepare mock response
     mock_datasets = [
         {
-            "dataset_id": "test_dataset",
-            "friendly_name": "Test Dataset",
-            "full_dataset_id": "project.test_dataset",
-        }
+            "id": "test_dataset_1",
+            "name": "Test Dataset 1",
+        },
+        {
+            "id": "test_dataset_2",
+            "name": "Test Dataset 2",
+        },
     ]
     mock_bq_client.list_datasets.return_value = mock_datasets
 
     # Call the tool
-    result = await server.call_tool(
-        tool={"name": "list_datasets", "arguments": {}},
-    )
+    result = await server.call_tool("list_datasets", {})
 
-    # Verify the result
-    assert result == {"datasets": mock_datasets}
+    # Verify the result matches the mock response
     mock_bq_client.list_datasets.assert_called_once()
+    assert isinstance(result, tuple)  # FastMCP returns a tuple
+    content_blocks, structured_data = result
+    assert isinstance(content_blocks, list)  # List of content blocks
+    assert len(content_blocks) == 1  # Should have one content block
+    content = content_blocks[0]
+    assert isinstance(content, TextContent)  # Should be a TextContent block
+    assert content.type == "text"  # Should be a text content block
+    assert structured_data == {"result": {"datasets": mock_datasets}}
 
 
 @pytest.mark.asyncio
@@ -52,55 +61,67 @@ async def test_list_tables(server, mock_bq_client):
     # Prepare mock response
     mock_tables = [
         {
-            "table_id": "test_table",
-            "full_table_id": "project.dataset.test_table",
-            "schema": [
-                {
-                    "name": "column1",
-                    "type": "STRING",
-                    "mode": "REQUIRED",
-                    "description": "Test column",
-                }
-            ],
-            "num_rows": 100,
-            "created": "2024-01-01T00:00:00Z",
-        }
+            "id": "test_table_1",
+            "name": "Test Table 1",
+            "schema": {
+                "fields": [{"name": "column1", "type": "STRING"}]
+            },
+        },
+        {
+            "id": "test_table_2",
+            "name": "Test Table 2",
+            "schema": {
+                "fields": [{"name": "column2", "type": "INTEGER"}]
+            },
+        },
     ]
     mock_bq_client.list_tables.return_value = mock_tables
 
     # Call the tool
     result = await server.call_tool(
-        tool={"name": "list_tables", "arguments": {"dataset_id": "test_dataset"}},
+        "list_tables",
+        {"dataset_id": "test_dataset"}
     )
 
-    # Verify the result
-    assert result == {"tables": mock_tables}
+    # Verify the result matches the mock response
     mock_bq_client.list_tables.assert_called_once_with("test_dataset")
+    assert isinstance(result, tuple)  # FastMCP returns a tuple
+    content_blocks, structured_data = result
+    assert isinstance(content_blocks, list)  # List of content blocks
+    assert len(content_blocks) == 1  # Should have one content block
+    content = content_blocks[0]
+    assert isinstance(content, TextContent)  # Should be a TextContent block
+    assert content.type == "text"  # Should be a text content block
+    assert structured_data == {"result": {"tables": mock_tables}}
 
 
 @pytest.mark.asyncio
 async def test_execute_query(server, mock_bq_client):
     # Prepare mock response
-    mock_query_result = {
-        "rows": [{"column1": "value1", "column2": 123}],
-        "total_rows": 1,
-        "schema": [
-            {"name": "column1", "type": "STRING", "mode": "REQUIRED"},
-            {"name": "column2", "type": "INTEGER", "mode": "REQUIRED"},
-        ],
-    }
-    mock_bq_client.execute_query.return_value = mock_query_result
+    mock_results = [
+        {"column1": "value1", "column2": 1},
+        {"column1": "value2", "column2": 2},
+    ]
+    mock_bq_client.execute_query.return_value = mock_results
 
     # Call the tool
     result = await server.call_tool(
-        tool={"name": "execute_query", "arguments": {"query": "SELECT * FROM test_dataset.test_table"}},
+        "execute_query",
+        {"query": "SELECT * FROM test_table"}
     )
 
-    # Verify the result
-    assert result == mock_query_result
+    # Verify the result matches the mock response
     mock_bq_client.execute_query.assert_called_once_with(
-        "SELECT * FROM test_dataset.test_table"
+        "SELECT * FROM test_table"
     )
+    assert isinstance(result, tuple)  # FastMCP returns a tuple
+    content_blocks, structured_data = result
+    assert isinstance(content_blocks, list)  # List of content blocks
+    assert len(content_blocks) == 1  # Should have one content block
+    content = content_blocks[0]
+    assert isinstance(content, TextContent)  # Should be a TextContent block
+    assert content.type == "text"  # Should be a text content block
+    assert structured_data == {"result": {"results": mock_results}}
 
 
 @pytest.mark.asyncio
@@ -109,8 +130,9 @@ async def test_list_datasets_error(server, mock_bq_client):
     mock_bq_client.list_datasets.side_effect = ValueError("Permission denied")
 
     # Call the tool and expect error
-    with pytest.raises(ValueError, match="Permission denied"):
-        await server.call_tool(tool={"name": "list_datasets", "arguments": {}})
+    error_msg = "Error executing tool list_datasets: Permission denied"
+    with pytest.raises(ToolError, match=error_msg):
+        await server.call_tool("list_datasets", {})
 
 
 @pytest.mark.asyncio
@@ -119,9 +141,11 @@ async def test_list_tables_error(server, mock_bq_client):
     mock_bq_client.list_tables.side_effect = ValueError("Dataset not found")
 
     # Call the tool and expect error
-    with pytest.raises(ValueError, match="Dataset not found"):
+    error_msg = "Error executing tool list_tables: Dataset not found"
+    with pytest.raises(ToolError, match=error_msg):
         await server.call_tool(
-            tool={"name": "list_tables", "arguments": {"dataset_id": "nonexistent_dataset"}},
+            "list_tables",
+            {"dataset_id": "non_existent_dataset"}
         )
 
 
@@ -131,7 +155,9 @@ async def test_execute_query_error(server, mock_bq_client):
     mock_bq_client.execute_query.side_effect = ValueError("Invalid query")
 
     # Call the tool and expect error
-    with pytest.raises(ValueError, match="Invalid query"):
+    error_msg = "Error executing tool execute_query: Invalid query"
+    with pytest.raises(ToolError, match=error_msg):
         await server.call_tool(
-            tool={"name": "execute_query", "arguments": {"query": "INVALID SQL"}},
+            "execute_query",
+            {"query": "INVALID SQL"}
         )
