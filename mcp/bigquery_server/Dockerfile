@@ -21,4 +21,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # Run the server
-CMD ["python", "-m", "server.py"]
+CMD ["python", "-m", "bigquery_server.server"]

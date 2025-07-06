@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def create_server() -> FastMCP:
     logger.info("Creating BigQuery MCP server...")
-    mcp = FastMCP(name="bigquery-mcp-server")
+    mcp = FastMCP(name="bigquery-mcp-server", host="0.0.0.0", port=8080)
     bq_client = BigQueryClient(project_id=os.getenv("GOOGLE_CLOUD_PROJECT"))
     logger.info("BigQuery client initialized with project: %s", os.getenv("GOOGLE_CLOUD_PROJECT"))
 
@@ -44,4 +44,4 @@ if __name__ == "__main__":
     logger.info("Starting server...")
     server = create_server()
     logger.info("Server created, starting to run...")
-    server.run()
+    server.run(transport="sse")
