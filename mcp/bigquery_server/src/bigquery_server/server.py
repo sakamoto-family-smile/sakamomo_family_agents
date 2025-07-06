@@ -2,8 +2,8 @@ import os
 import logging
 from typing import Any, Dict, List
 
-from mcp.server.fastmcp import FastMCP
-from .bigquery_client import BigQueryClient
+from fastmcp import FastMCP
+from bigquery_client import BigQueryClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,8 +40,9 @@ def create_server() -> FastMCP:
     return mcp
 
 
+server = create_server()
+
+
 if __name__ == "__main__":
-    logger.info("Starting server...")
-    server = create_server()
     logger.info("Server created, starting to run...")
-    server.run(transport="sse")
+    server.run(transport="http", path="/mcp")

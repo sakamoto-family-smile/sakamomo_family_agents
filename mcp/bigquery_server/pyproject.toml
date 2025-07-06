@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "MCP server for BigQuery operations"
 requires-python = ">=3.9"
 dependencies = [
+    "fastmcp>=1.10.0",
     "mcp>=1.10.0",
     "google-cloud-bigquery>=3.11.0",
     "google-auth>=2.22.0",
