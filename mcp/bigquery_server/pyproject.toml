@@ -21,6 +21,16 @@ test = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build]
+packages = ["src/bigquery_server"]
+include = [
+    "src/**/*.py",
+    "src/**/*.typed",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/bigquery_server"]
 

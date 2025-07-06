@@ -16,6 +16,10 @@ def create_server() -> FastMCP:
     bq_client = BigQueryClient(project_id=os.getenv("GOOGLE_CLOUD_PROJECT"))
     logger.info("BigQuery client initialized with project: %s", os.getenv("GOOGLE_CLOUD_PROJECT"))
 
+    @mcp.resource("config://version")
+    def get_version():
+        return "1.0.0"
+
     @mcp.tool()
     async def list_datasets() -> Dict[str, List[Dict[str, Any]]]:
         """Lists all available datasets in the project."""
