@@ -25,14 +25,7 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build]
-packages = ["src/bigquery_server"]
-include = [
-    "src/**/*.py",
-    "src/**/*.typed",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/bigquery_server"]
+packages = ["src"]
 
 [tool.ruff]
 line-length = 88

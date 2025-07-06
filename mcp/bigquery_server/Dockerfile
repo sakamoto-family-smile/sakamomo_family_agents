@@ -11,11 +11,12 @@ RUN apt-get update && apt-get install -y \
 COPY pyproject.toml .
 COPY src/ src/
 
-# Install dependencies
-RUN pip install --no-cache-dir .
+# Install dependencies and the package in editable mode
+RUN pip install --no-cache-dir -e .
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
 
 # Open port 8080
 EXPOSE 8080

@@ -3,7 +3,7 @@ import logging
 from typing import Any, Dict, List
 
 from fastmcp import FastMCP
-from bigquery_client import BigQueryClient
+from bigquery_server.bigquery_client import BigQueryClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 def create_server() -> FastMCP:
     logger.info("Creating BigQuery MCP server...")
     mcp = FastMCP(name="bigquery-mcp-server", host="0.0.0.0", port=8080)
-    bq_client = BigQueryClient(project_id=os.getenv("GOOGLE_CLOUD_PROJECT"))
-    logger.info("BigQuery client initialized with project: %s", os.getenv("GOOGLE_CLOUD_PROJECT"))
+    project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+    bq_client = BigQueryClient(project_id=project_id)
+    logger.info("BigQuery client initialized with project: %s", project_id)
 
     @mcp.resource("config://version")
     def get_version():

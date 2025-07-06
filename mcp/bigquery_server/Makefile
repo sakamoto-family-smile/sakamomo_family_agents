@@ -30,6 +30,14 @@ deploy: push
 run-local:
 	python -m bigquery_server.server
 
+# Docker local development
+run-docker: build
+	docker run -p 8080:8080 \
+		-e GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) \
+		-v $(PWD)/../../service_account.json:/app/service_account.json \
+		-e GOOGLE_APPLICATION_CREDENTIALS=/app/service_account.json \
+		$(IMAGE)
+
 # Testing
 test:
 	pytest src/bigquery_server/tests/
