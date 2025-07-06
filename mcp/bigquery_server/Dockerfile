@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -17,5 +17,8 @@ RUN pip install --no-cache-dir .
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 
+# Open port 8080
+EXPOSE 8080
+
 # Run the server
-CMD ["python", "-m", "bigquery_server.server"]
+CMD ["python", "-m", "server.py"]
