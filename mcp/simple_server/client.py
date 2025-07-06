@@ -5,9 +5,9 @@ from mcp.client.streamable_http import streamablehttp_client
 async def test_tools(session: ClientSession):
     """Test all available tools"""
     # List available tools
-    tools = await session.list_tools()
+    tools_response = await session.list_tools()
     print("\n=== Available Tools ===")
-    for tool in tools:
+    for tool in tools_response.tools:
         print(f"- {tool.name}: {tool.description}")
 
     # Test echo tool
@@ -24,9 +24,9 @@ async def test_tools(session: ClientSession):
 async def test_resources(session: ClientSession):
     """Test all available resources"""
     # List available resources
-    resources = await session.list_resources()
+    resources_response = await session.list_resources()
     print("\n=== Available Resources ===")
-    for resource in resources:
+    for resource in resources_response.resources:
         print(f"- {resource.uri}")
 
     # Test version resource
