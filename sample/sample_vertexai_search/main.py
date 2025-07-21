@@ -27,7 +27,7 @@ def get_search_service_path() -> str:
         )
 
     return (
-        f"projects/{project_id}/locations/{location}/collections/default_collection/engines/{engine_id}/servingConfigs/default_config"
+        f"projects/{project_id}/locations/{location}/collections/default_collection/engines/{engine_id}"
     )
 
 
@@ -85,7 +85,13 @@ def search_documents(
         query=query,
         page_size=page_size,
         filter=filter,
-        content_search_spec=content_search_spec
+        content_search_spec=content_search_spec,
+        query_expansion_spec=discoveryengine.SearchRequest.QueryExpansionSpec(
+            condition=discoveryengine.SearchRequest.QueryExpansionSpec.Condition.AUTO,
+        ),
+        spell_correction_spec=discoveryengine.SearchRequest.SpellCorrectionSpec(
+            mode=discoveryengine.SearchRequest.SpellCorrectionSpec.Mode.AUTO
+        ),
     )
 
     response = client.search(request)
@@ -127,7 +133,7 @@ def main():
         results = search_documents(
             query=query,
             page_size=5,
-            filter="language = 'en'"  # Optional filter example
+            # filter="language = 'en'"  # Optional filter example
         )
 
         print(f"\nFound {len(results)} results:")
