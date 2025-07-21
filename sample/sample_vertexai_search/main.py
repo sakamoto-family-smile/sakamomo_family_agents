@@ -98,26 +98,16 @@ def search_documents(
 
     results = []
     for result in response.results:
-        document = result.document
-        relevance_score = (
-            result.ranking_info.relevance_score if result.ranking_info else None
-        )
+        # debug
+        # print(result)
 
-        # Extract chunks/snippets from the result
-        chunks = []
-        if result.extractive_segments:
-            for segment in result.extractive_segments:
-                chunks.append({
-                    "content": segment.content,
-                    "score": segment.score
-                })
+        document = result.document
+        relevance_score = result.model_scores["relevance_score"]
 
         results.append({
             "id": document.id,
             "name": document.name,
-            "data": dict(document.derived_struct_data),
-            "relevance_score": relevance_score,
-            "chunks": chunks
+            "relevance_score": relevance_score
         })
 
     return results
@@ -141,16 +131,7 @@ def main():
             print(f"\nResult {idx}:")
             print(f"ID: {result['id']}")
             print(f"Name: {result['name']}")
-            print(f"Relevance Score: {result['relevance_score']:.4f}")
-            print("Data:", result['data'])
-
-            # Display chunks
-            if result['chunks']:
-                print("\nRelevant Chunks:")
-                for chunk_idx, chunk in enumerate(result['chunks'], 1):
-                    print(f"\nChunk {chunk_idx}:")
-                    print(f"Score: {chunk['score']:.4f}")
-                    print(f"Content: {chunk['content']}")
+            print(f"Relevance Score: {result['relevance_score']}")
 
     except Exception as e:
         print(f"Error occurred: {e}")
